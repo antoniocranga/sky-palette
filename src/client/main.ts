@@ -1,0 +1,374 @@
+import "@fontsource/jetbrains-mono/latin-400.css";
+import "@fontsource/jetbrains-mono/latin-500.css";
+import "@fontsource/jetbrains-mono/latin-600.css";
+import "@fontsource/playfair-display/latin-600-italic.css";
+import "./styles.css";
+import "./modal-scrim.css";
+
+import { getConfig, searchCities, type AppConfig } from "./api";
+import { bindGlobalActions, qs, registerAction } from "./lib/dom";
+import { ModalController } from "./lib/dom";
+import { HomeFeature } from "./features/home";
+import { GalleryFeature } from "./features/gallery";
+import { DetailFeature } from "./features/detail";
+import { SubmitFeature } from "./features/submit";
+import { ShareFeature } from "./features/share";
+import { InfoFeature } from "./features/info";
+import { CitySearch, selectCityFromQuery } from "./features/search";
+import {
+  DEFAULT_CITY,
+  preferredCitySlug,
+  readStoredCitySlug,
+  setCity,
+  setScreen,
+  store,
+  toAppCity,
+  type AppCity,
+  type ScreenName,
+} from "./state";
+import { DEFAULT_INTERVAL, parseRoute, serializeRoute, type AppRoute, type RouteInterval } from "./lib/route";
+import { parseClock } from "../shared/time";
+
+const SCREEN_IDS: Record<ScreenName, string> = {
+  home: "screen-home",
+  gallery: "screen-gallery",
+  detail: "screen-detail",
+};
+
+let galleryModal: ModalController | null = null;
+let gallerySearch: CitySearch | null = null;
+let hydrating = true;
+let replaceTimer: ReturnType<typeof setTimeout> | null = null;
+
+export async function bootstrap(): Promise<void> {
+  bindGlobalActions();
+  installErrorBoundary();
+
+  const route = parseRoute(window.location.search);
+  // Paint the static home shell before any network work. Data-backed text is
+  // gated separately, and deep links to gallery/detail stay gated until their
+  // data is ready so they never flash the wrong screen.
+  const shellIsHome = route.view !== "detail" && route.view !== "gallery";
+  if (shellIsHome) document.body.removeAttribute("data-booting");
+
+  const initialCity = await resolveInitialCity();
+  store.set({ city: initialCity });
+
+  const home = new HomeFeature();
+  const gallery = new GalleryFeature(route.interval ?? DEFAULT_INTERVAL);
+  const detail = new DetailFeature();
+  new SubmitFeature();
+  new ShareFeature();
+  new InfoFeature();
+
+  const galleryModalRoot = qs<HTMLElement>("#gallery-search-modal");
+  if (galleryModalRoot) {
+    galleryModal = new ModalController(galleryModalRoot, { initialFocus: "#modal-city-search-input" });
+    gallerySearch = new CitySearch({
+      input: qs<HTMLInputElement>("#modal-city-search-input") ?? document.createElement("input"),
+      dropdown: qs<HTMLElement>("#modal-city-dropdown") ?? document.createElement("div"),
+      tone: "light",
+      onSelect: () => {
+        galleryModal?.hide();
+      },
+    });
+  }
+
+  new CitySearch({
+    input: qs<HTMLInputElement>("#city-search-input") ?? document.createElement("input"),
+    dropdown: qs<HTMLElement>("#city-dropdown") ?? document.createElement("div"),
+    onSelect: () => {
+      setScreen("home");
+    },
+  });
+
+  const goGallery = (): void => {
+    if (store.state.screen === "detail") {
+      detail.backToGallery();
+      return;
+    }
+    if (store.state.screen === "gallery") return;
+    // Entering the gallery from Home always restores the default interval.
+    if (store.state.daysRequested !== DEFAULT_INTERVAL) void gallery.useInterval(DEFAULT_INTERVAL);
+    setScreen("gallery");
+  };
+
+  registerAction("nav", (element) => {
+    const target = element.dataset.screen;
+    if (target === "gallery") {
+      goGallery();
+      return;
+    }
+    if (target === "home" || target === "detail") {
+      setScreen(target);
+    }
+  });
+
+  registerAction("gallery", goGallery);
+
+  registerAction("open-gallery-search", (element) => {
+    gallerySearch?.reset();
+    galleryModal?.show(element);
+    requestAnimationFrame(() => gallerySearch?.focus());
+  });
+
+  registerAction("close-gallery-search", () => {
+    gallerySearch?.close();
+    galleryModal?.hide();
+  });
+
+  registerAction("pick-city", (element) => {
+    const query = element.dataset.query;
+    if (!query) return;
+    galleryModal?.hide();
+    void selectCityFromQuery(query, "gallery");
+  });
+
+  registerAction("suggest-city", (element) => {
+    const query = element.dataset.query;
+    if (!query) return;
+    void selectCityFromQuery(query, null);
+  });
+
+  store.subscribeKey("screen", () => applyScreen());
+  applyScreen();
+
+  // Load the config in parallel; the page renders with defaults if it fails.
+  void loadConfig();
+
+  // Start both data loads, but never let /api/palette hold the home shell.
+  const dataReady = Promise.allSettled([gallery.start(), home.start()]);
+  await dataReady;
+  await applyParsedRoute(route, home, gallery, detail);
+  document.body.removeAttribute("data-booting");
+  hydrating = false;
+
+  installRouteSync();
+  // Canonicalise the entry URL before any navigation so Back always returns
+  // to an explicit `view=home|gallery|detail`, not the bare document URL.
+  writeRoute("replace");
+  window.addEventListener("popstate", () => {
+    void applyHistoryRoute(home, gallery, detail);
+  });
+}
+
+async function loadConfig(): Promise<AppConfig | null> {
+  try {
+    const config = await getConfig();
+    store.set({ config });
+    return config;
+  } catch {
+    store.set({ config: null });
+    return null;
+  }
+}
+
+async function resolveCityBySlug(slug: string): Promise<AppCity | null> {
+  if (slug === DEFAULT_CITY.slug || slug === "bucharest") return DEFAULT_CITY;
+  const words = decodeURIComponent(slug).replace(/-/g, " ");
+  try {
+    const results = await searchCities(words);
+    const exact = results.find((city) => city.slug === slug);
+    const chosen = exact ?? results[0];
+    return chosen ? toAppCity(chosen) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveInitialCity(): Promise<AppCity> {
+  // URL wins over the stored preference; the preference wins over the default.
+  // Hydration never writes the preference: only a deliberate pick persists.
+  const slug = preferredCitySlug(window.location.search, readStoredCitySlug());
+  if (!slug) return DEFAULT_CITY;
+  return (await resolveCityBySlug(slug)) ?? DEFAULT_CITY;
+}
+
+/** Apply a parsed route in one pass, for boot and popstate. */
+async function applyParsedRoute(
+  route: AppRoute,
+  home: HomeFeature,
+  gallery: GalleryFeature,
+  detail: DetailFeature,
+): Promise<void> {
+  const interval: RouteInterval = route.interval ?? DEFAULT_INTERVAL;
+
+  if (route.city && route.city !== store.state.city.slug) {
+    const city = await resolveCityBySlug(route.city);
+    if (city) {
+      setCity(city);
+      await Promise.allSettled([home.load()]);
+    }
+  }
+
+  if (interval !== store.state.daysRequested) {
+    await gallery.useInterval(interval);
+  }
+
+  const view = route.view;
+  if (view === "detail") {
+    const days = store.state.days;
+    if (days.length === 0) {
+      setScreen("home");
+      return;
+    }
+    const index = route.day ? days.findIndex((day) => day.date === route.day) : 0;
+    const resolvedIndex = index >= 0 ? index : 0;
+    const clock = route.time ? parseClock(route.time) : null;
+    const hour = clock ? clock.hours + clock.minutes / 60 : null;
+    detail.open(resolvedIndex, undefined, { hour });
+    return;
+  }
+
+  if (view === "gallery") {
+    setScreen("gallery");
+    return;
+  }
+
+  setScreen("home");
+  if (route.time) home.applyRouteTime(route.time);
+}
+
+function currentRoute(): AppRoute {
+  const state = store.state;
+  const view = state.screen;
+  const city = state.city.slug;
+  const interval = (state.daysRequested || DEFAULT_INTERVAL) as RouteInterval;
+
+  // `view` is always explicit, and each screen serializes only its own state:
+  // Home keeps neither scrub time nor interval, Gallery keeps only interval,
+  // Detail keeps day + time + interval. Leaving a screen therefore deletes
+  // its parameters instead of leaving stale deep-link state behind.
+  if (view === "detail") {
+    return {
+      city,
+      view,
+      day: state.share?.dateIso ?? null,
+      time: state.share?.timeLabel ?? null,
+      interval,
+    };
+  }
+  if (view === "gallery") {
+    return { city, view, day: null, time: null, interval };
+  }
+  return { city, view, day: null, time: null, interval: null };
+}
+
+function writeRoute(mode: "push" | "replace"): void {
+  if (hydrating) return;
+  const path = serializeRoute(currentRoute());
+  if (`${window.location.pathname}${window.location.search}` === path) return;
+  if (mode === "push") window.history.pushState({}, "", path);
+  else window.history.replaceState({}, "", path);
+}
+
+function scheduleReplace(): void {
+  if (hydrating) return;
+  if (replaceTimer) clearTimeout(replaceTimer);
+  replaceTimer = setTimeout(() => {
+    replaceTimer = null;
+    writeRoute("replace");
+  }, 300);
+}
+
+function installRouteSync(): void {
+  store.subscribe((state, previous) => {
+    if (hydrating) return;
+    if (state.screen !== previous.screen) {
+      if (replaceTimer) {
+        clearTimeout(replaceTimer);
+        replaceTimer = null;
+      }
+      writeRoute("push");
+      return;
+    }
+    if (state.city !== previous.city || state.daysRequested !== previous.daysRequested || state.share !== previous.share) {
+      scheduleReplace();
+    }
+  });
+}
+
+async function applyHistoryRoute(home: HomeFeature, gallery: GalleryFeature, detail: DetailFeature): Promise<void> {
+  const route = parseRoute(window.location.search);
+  hydrating = true;
+  if (replaceTimer) {
+    clearTimeout(replaceTimer);
+    replaceTimer = null;
+  }
+  try {
+    await applyParsedRoute(route, home, gallery, detail);
+  } finally {
+    hydrating = false;
+  }
+}
+
+function applyScreen(): void {
+  const screen = store.state.screen;
+  for (const [name, id] of Object.entries(SCREEN_IDS) as [ScreenName, string][]) {
+    const element = qs<HTMLElement>(`#${id}`);
+    if (!element) continue;
+    const active = name === screen;
+    element.classList.toggle("active", active);
+    element.setAttribute("aria-hidden", active ? "false" : "true");
+    element.inert = !active;
+  }
+  document.body.dataset.screen = screen;
+
+  const backdrop = qs<HTMLElement>("#sky-backdrop");
+  if (backdrop) {
+    if (screen === "detail") backdrop.style.background = "#FFFFFF";
+    else backdrop.style.background = "#090B10";
+  }
+
+  const homeButton = qs("#nav-btn-home");
+  const galleryButton = qs("#nav-btn-gallery");
+  setDockState(homeButton, screen === "home");
+  setDockState(galleryButton, screen === "gallery" || screen === "detail");
+
+  const detailScreen = qs<HTMLElement>("#screen-detail");
+  if (screen === "detail") detailScreen?.scrollTo({ top: 0 });
+
+  const active = document.activeElement;
+  const activeScreen = active instanceof Element ? active.closest(".app-screen") : null;
+  if (activeScreen && activeScreen !== qs("#screen-" + screen)) {
+    const focusTarget =
+      screen === "home"
+        ? qs<HTMLElement>("#city-search-input")
+        : screen === "gallery"
+          ? qs<HTMLElement>("#interval-trigger-btn")
+          : qs<HTMLElement>('#screen-detail [data-action="nav"][data-screen="gallery"]');
+    focusTarget?.focus({ preventScroll: true });
+  }
+}
+
+function setDockState(button: Element | null, active: boolean): void {
+  if (!button) return;
+  button.classList.toggle("bg-white", active);
+  button.classList.toggle("text-black", active);
+  button.classList.toggle("font-semibold", active);
+  button.classList.toggle("shadow-md", active);
+  button.classList.toggle("text-white/70", !active);
+  button.classList.toggle("hover:text-white", !active);
+  button.classList.toggle("hover:bg-white/10", !active);
+  if (active) button.setAttribute("aria-current", "page");
+  else button.removeAttribute("aria-current");
+}
+
+function installErrorBoundary(): void {
+  window.addEventListener("error", (event) => {
+    event.preventDefault();
+    console.warn("[Sky Palette] A client exception was contained.");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    event.preventDefault();
+    console.warn("[Sky Palette] An async operation was contained.");
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => void bootstrap(), { once: true });
+} else {
+  void bootstrap();
+}
+
+export { SCREEN_IDS, applyScreen };

@@ -1,32 +1,52 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sky-palette",
-  "main": "src/index.ts",
-  "compatibility_date": "2024-11-12",
-  "compatibility_flags": [
-    "nodejs_compat"
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-11-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "skypalette.app", "custom_domain": true },
+    { "pattern": "www.skypalette.app", "custom_domain": true }
   ],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "triggers": {
+    "crons": ["0 3 * * *"]
+  },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
-  },
-  "routes": [
-    {
-      "pattern": "skypalette.app",
-      "zone_name": "skypalette.app",
-      "custom_domain": true
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
     },
-    {
-      "pattern": "www.skypalette.app",
-      "zone_name": "skypalette.app",
-      "custom_domain": true
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    },
+    "issues": {
+      "enabled": true
     }
-  ],
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "sky-palette-db",
-      "database_id": "5e1c6b54-4020-4e9b-a5d5-0cea27498741"
+      "database_id": "5e1c6b54-4020-4e9b-a5d5-0cea27498741",
+      "migrations_dir": "./migrations"
     }
   ],
   "r2_buckets": [
@@ -35,13 +55,36 @@
       "bucket_name": "sky-photos"
     }
   ],
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
-  },
+  "ratelimits": [
+    {
+      "name": "API_LIMITER",
+      "namespace_id": "1000",
+      "simple": { "limit": 600, "period": 60 }
+    },
+    {
+      "name": "PALETTE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "SUBMIT_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "CITIES_LIMITER",
+      "namespace_id": "1003",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "OG_LIMITER",
+      "namespace_id": "1004",
+      "simple": { "limit": 20, "period": 60 }
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "production",
     "APP_URL": "https://skypalette.app",
-    "OTEL_SERVICE_NAME": "sky-palette"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGBAIjnbTsIMtZ6Z"
   }
 }

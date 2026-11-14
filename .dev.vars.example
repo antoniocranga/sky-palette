@@ -1,12 +1,12 @@
-# Cloudflare Workers local dev environment secrets (.dev.vars)
-# Copy this to .dev.vars for local development with `wrangler dev`
-# NEVER commit the actual .dev.vars file to git!
+# Local Worker secrets for `npm run dev`.
+# Copy to `.dev.vars` (git-ignored) and fill in. NEVER commit `.dev.vars`.
+#
+# `TURNSTILE_SITE_KEY` is public and lives in `wrangler.jsonc` `vars`.
+# These values belong in Cloudflare, not in GitHub:
 
-# Turnstile bot challenge secret (from Cloudflare Dashboard -> Turnstile)
 TURNSTILE_SECRET_KEY="0x4AAAAAA..."
-
-# Salt for hashing IP addresses (SHA-256) for privacy-preserving rate limiting
-IP_SALT="replace-with-a-random-salt-string"
-
-# Environment
+IP_SALT="generate-with: openssl rand -hex 32"
+ADMIN_TOKEN="generate-with: openssl rand -hex 32"
+# Set to "false" to pause uploads without a deploy.
+UPLOADS_ENABLED="true"
 ENVIRONMENT="development"

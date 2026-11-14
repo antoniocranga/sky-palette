@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<!-- Unslopped with methodology by Damir Sokolovsky (@heydamir), CC BY 4.0 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sky Palette — Physical Sky Color Engine</title>
+  <meta name="description" content="Real-time five-swatch sky palettes computed from solar geometry and live cloud layers. Explore 15 days of sunset colour, scrub the sun, share a sky card.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#090b10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+  <link rel="canonical" href="https://skypalette.app">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://skypalette.app">
+  <meta property="og:title" content="Sky Palette — Physical Sky Color Engine">
+  <meta property="og:description" content="Real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.">
+  <meta property="og:image" content="https://skypalette.app/api/og?city=Bucharest">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Five-swatch sky palette card for Bucharest">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://skypalette.app">
+  <meta name="twitter:title" content="Sky Palette — Physical Sky Color Engine">
+  <meta name="twitter:description" content="Real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.">
+  <meta name="twitter:image" content="https://skypalette.app/api/og?city=Bucharest">
+  <meta name="twitter:image:alt" content="Five-swatch sky palette card for Bucharest">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Sky Palette",
+    "url": "https://skypalette.app",
+    "description": "Physical sky color engine and solar architecture calculating real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "All"
+  }
+  </script>
+
+  <!-- Cloudflare Web Analytics (Privacy-First: Zero Cookies, Zero Storage, Zero Personal Data) -->
+  <!-- In production, activate with: <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "CLOUDFLARE_BEACON_TOKEN"}'></script> -->
+  <!-- Styles and fonts are bundled locally: no third-party runtime requests. -->
+  <link rel="preload" href="/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script type="module" src="/src/client/main.ts"></script>
+</head>
+<body data-booting="true" class="selection:bg-black selection:text-white">
+
+  <!-- One full-bleed sky layer behind every screen, including the safe areas. -->
+  <div id="sky-backdrop" aria-hidden="true"></div>
+  <div id="safe-top-scrim" aria-hidden="true"></div>
+  <div id="safe-bottom-scrim" aria-hidden="true"></div>
+
+  <!-- Accessible Skip Link -->
+  <a href="#main-home" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[99] focus:px-4 focus:py-2 focus:bg-black focus:text-white focus:rounded-full focus:shadow-2xl focus:border focus:border-white/30 text-xs font-mono">
+    Skip to main content
+  </a>
+
+  <!-- Accessible Root Heading (Screen Reader Accessible) -->
+  <h1 class="sr-only">Sky Palette — Physical Sky Color Engine & Solar Architecture</h1>
+
+  <!-- Toast Notification -->
+  <div id="toast" role="status" aria-live="polite" aria-atomic="true" class="fixed top-6 left-1/2 z-[80] bg-black text-white px-4 py-2 rounded-full text-xs font-mono border border-white/20 shadow-2xl">
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- DYNAMIC BOTTOM DOCK (Responsive & Unified Height)        -->
+  <!-- ======================================================== -->
+  <div id="app-dock" class="fixed bottom-4 sm:bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 sm:gap-3 select-none">
+
+    <!-- Dynamic Navigation Pill (Same height as search bar) -->
+    <nav aria-label="Screen navigation" class="flex items-center gap-1 sm:gap-2 p-1.5 bg-black text-white rounded-full shadow-2xl text-sm sm:text-base font-medium h-[52px] sm:h-[56px]">
+      <button data-action="nav" data-screen="home" id="nav-btn-home" aria-label="Home" aria-current="page" class="dock-nav-btn h-full px-4 sm:px-7 rounded-full flex items-center justify-center transition-colors bg-white text-black font-semibold shadow-md">
+        Home
+      </button>
+      <button data-action="gallery" id="nav-btn-gallery" aria-label="15-day gallery" class="dock-nav-btn h-full px-4 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+        Gallery
+      </button>
+      <button data-action="open-submit" id="nav-btn-submit" aria-label="Submit a sky photo" class="dock-nav-btn h-full px-4 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+        Submit
+      </button>
+    </nav>
+
+    <!-- Dedicated Circular Share Button (Same width/height as search bar) -->
+    <button data-action="open-share" id="dock-share-btn" title="Share palette" aria-label="Share current sky palette" class="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full bg-black text-white hover:bg-neutral-800 flex items-center justify-center shadow-2xl transition-transform active:scale-95 shrink-0">
+      <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="18" cy="5" r="3"/>
+        <circle cx="6" cy="12" r="3"/>
+        <circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+    </button>
+
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 1: HOME (Live Bucharest Sky & Step Scrubber)      -->
+  <!-- ======================================================== -->
+  <section id="screen-home" data-tone="dark" class="app-screen active flex flex-col justify-between overflow-hidden">
+    <!-- Top Spacer & Discreet Info Button -->
+    <div class="w-full pt-4 sm:pt-6"></div>
+    <button type="button" data-action="open-info" title="About Sky Palette, Tech & Licenses" aria-label="About Sky Palette" class="info-button fixed top-4 right-4 sm:top-5 sm:right-6 z-40 w-11 h-11 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md text-white/70 hover:text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 11v5"/>
+        <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+
+    <!-- Center Stage: Location Header + Search + Solar Hour Slider -->
+    <main id="main-home" data-sky-ready="false" class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 max-w-xl mx-auto w-full">
+      <h2 class="sr-only">Live Atmospheric Palette & Astronomical Solar Position</h2>
+
+      <!-- 1. Location, local clock and live/forecast state -->
+      <div class="home-ink flex flex-wrap items-center justify-center gap-1.5 mb-2.5 select-none text-[11px] sm:text-xs font-mono tracking-tight">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>
+        <span id="home-city-label" class="font-medium">Bucharest</span>
+        <span id="home-city-suffix" class="home-muted">HQ</span>
+        <span class="home-muted" aria-hidden="true">·</span>
+        <span id="bucharest-clock" class="tabular-nums"></span>
+        <span id="home-mode-badge" class="home-mode-badge" data-mode="live" aria-hidden="true">live</span>
+      </div>
+
+      <!-- 2. Pure Black Rounded Search Bar -->
+      <div class="w-full relative mb-5">
+        <label for="city-search-input" class="sr-only">Search city</label>
+        <div class="search-field search-field--dark search-pill search-pill-dark relative flex items-center bg-black text-white rounded-full h-[52px] sm:h-[56px] px-6 shadow-2xl">
+          <!-- Search Icon -->
+          <svg class="w-4 h-4 text-white/80 mr-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+
+          <input
+            type="text"
+            id="city-search-input"
+            placeholder="Search the location of your sky"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="city-dropdown"
+            aria-expanded="false"
+            class="w-full h-full min-h-11 bg-transparent border-none text-white placeholder:text-white/60 placeholder:text-xs sm:placeholder:text-sm text-xs sm:text-sm focus:outline-none py-0 pr-2 font-normal"
+          />
+        </div>
+
+        <!-- Black Rounded-3xl Popover Dropdown with White Text -->
+        <div id="city-dropdown" role="listbox" aria-label="City results" class="absolute left-0 right-0 top-full mt-3 bg-black text-white rounded-3xl overflow-hidden divide-y divide-white/10 hidden z-30 shadow-2xl max-h-72 overflow-y-auto">
+          <!-- Dynamic suggestion rows populated by JS -->
+        </div>
+      </div>
+
+      <!-- Suggested Cities (No background, 'Suggested:' prefix) -->
+      <div class="home-suggest flex flex-wrap items-center justify-center gap-3 mt-1 text-xs">
+        <span class="home-muted font-normal">Suggested:</span>
+        <button type="button" data-action="suggest-city" data-query="Bucharest" class="home-suggest-strong underline-offset-4 hover:underline">
+          Bucharest (HQ)
+        </button>
+        <button type="button" data-action="suggest-city" data-query="Tokyo" class="home-suggest-link underline-offset-4 hover:underline">
+          Tokyo
+        </button>
+        <button type="button" data-action="suggest-city" data-query="Reykjavik" class="home-suggest-link underline-offset-4 hover:underline">
+          Reykjavik
+        </button>
+        <button type="button" data-action="suggest-city" data-query="Paris" class="home-suggest-link underline-offset-4 hover:underline">
+          Paris
+        </button>
+        <button type="button" data-action="suggest-city" data-query="Buenos Aires" class="home-suggest-link underline-offset-4 hover:underline">
+          Buenos Aires
+        </button>
+      </div>
+
+      <!-- Live weather failure state (the normal home has no readout line) -->
+      <div id="home-error" hidden role="alert" class="mt-4 w-full max-w-sm rounded-2xl bg-black/70 backdrop-blur-md border border-white/20 px-4 py-3 text-white shadow-xl">
+        <div class="flex items-start gap-2">
+          <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden="true"></span>
+          <p id="home-error-text" class="text-[11px] leading-relaxed text-white/85 flex-1"></p>
+        </div>
+        <button type="button" data-action="retry-home" class="mt-2.5 w-full h-11 rounded-full bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors">
+          Retry live weather
+        </button>
+      </div>
+
+      <!-- Solar values stay in the accessibility tree; they are not a visual line. -->
+      <p id="home-solar-status" class="sr-only">
+        <span id="home-phase">—</span> · Sun <span id="home-elevation">—</span> · Az <span id="home-azimuth">—</span>
+        · Sunrise <span id="home-sunrise">—</span> · Sunset <span id="home-sunset">—</span>
+        · Cloud <span id="home-clouds">—</span>
+      </p>
+
+    </main>
+
+
+    <!-- Footer: Quiet single line -->
+
+    <!-- ======================================================== -->
+    <!-- HORIZONTAL RULER JOG-DIAL SCRUBBER (00:00 -> LIVE)       -->
+    <!-- ======================================================== -->
+    <div id="ruler-slider-container" class="relative z-30 mb-36 sm:mb-36 md:mb-40 flex flex-col items-center select-none w-full max-w-sm mx-auto px-4">
+
+      <!-- Time Display directly above center tick (Expands when scrolling, compact when resting) -->
+      <div class="h-7 flex items-center justify-center mb-1 select-none">
+        <span
+          id="ruler-time-display"
+          class="font-sans font-semibold tracking-tight text-xs sm:text-sm transition-all duration-150 tabular-nums"
+        >—:—</span>
+      </div>
+
+      <!-- Ruler Tape Viewport with Soft Left/Right Fade Mask -->
+      <div
+        id="ruler-viewport"
+        role="slider"
+        tabindex="0"
+        aria-label="Sky time of day"
+        aria-valuemin="0"
+        aria-valuemax="1440"
+        aria-valuenow="0"
+        aria-valuetext="Loading"
+        class="ruler-viewport relative w-64 sm:w-72 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none overflow-hidden"
+      >
+        <!-- Horizontal Moving Tape -->
+        <div id="ruler-tape" class="ruler-tape absolute top-0 bottom-0 flex items-center will-change-transform" style="left: 50%; transform: translateX(0px);">
+          <!-- Discrete Ticks generated dynamically by JS -->
+        </div>
+      </div>
+
+
+    </div>
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 2: CITY GALLERY (Full Screen Mosaic + Popovers)   -->
+  <!-- ======================================================== -->
+  <section id="screen-gallery" class="app-screen" aria-label="Sunset gallery">
+
+    <!-- Dynamic Full-bleed Mosaic Grid -->
+    <main id="gallery-main" class="gallery-main w-full h-full p-0 m-0 overflow-y-auto">
+      <div id="day-cards-grid" class="day-grid w-full" aria-busy="true" aria-live="polite">
+        <!-- Tiles dynamically rendered by JS -->
+      </div>
+
+      <!-- Loading skeleton -->
+      <div id="gallery-skeleton" class="absolute inset-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-0" aria-hidden="true">
+        <div class="skeleton-tile"></div><div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div><div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div><div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div><div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+        <div class="skeleton-tile"></div><div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="gallery-empty" hidden class="absolute inset-0 flex items-center justify-center p-6">
+        <div class="max-w-sm text-center bg-black/80 border border-white/20 rounded-3xl px-6 py-7 text-white shadow-2xl">
+          <p class="text-sm font-semibold">No sky history yet</p>
+          <p class="mt-1 text-xs text-white/60">We could not build a palette series for this location. Try another city.</p>
+          <button type="button" data-action="open-gallery-search" class="mt-4 h-11 px-5 rounded-full bg-white text-black text-xs font-semibold">Choose a city</button>
+        </div>
+      </div>
+
+      <!-- Error state -->
+      <div id="gallery-error" hidden role="alert" class="absolute inset-0 flex items-center justify-center p-6">
+        <div class="max-w-sm w-full text-center bg-black/85 border border-white/20 rounded-3xl px-6 py-7 text-white shadow-2xl">
+          <p class="text-sm font-semibold">Could not load the sky series</p>
+          <p id="gallery-error-text" class="mt-1 text-xs text-white/60">The forecast service did not answer.</p>
+          <button type="button" data-action="retry-gallery" class="mt-4 h-11 w-full rounded-full bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors">Retry</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Floating controls: interval/info at the top-right; location above the dock. -->
+    <header class="fixed top-0 left-3 right-3 sm:left-6 sm:right-6 z-40 flex items-center justify-between gap-2 pointer-events-none">
+      <button type="button" id="gallery-location-btn" data-action="open-gallery-search" aria-label="Change gallery location" class="search-field search-field--gallery pointer-events-auto flex items-center gap-1.5 sm:gap-2 h-11 px-3 py-1.5 sm:px-4 rounded-full bg-black/80 backdrop-blur-md text-white transition-colors min-w-0 max-w-[55%]">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" aria-hidden="true"></span>
+        <span id="gallery-city-badge" class="truncate">—</span>
+        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/60 ml-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+
+      <!-- Top-Right Interval Popover Trigger + Discreet Info Button -->
+      <div class="pointer-events-auto flex items-center gap-1.5 shrink-0">
+        <div class="relative">
+          <button type="button" data-action="toggle-interval" id="interval-trigger-btn" aria-expanded="false" aria-controls="interval-popover" class="flex items-center gap-1.5 sm:gap-2 min-h-11 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-black/80 backdrop-blur-md text-white text-xs font-mono border border-white/20 hover:border-white/40 transition-colors shadow-2xl cursor-pointer">
+            <span id="current-interval-label" class="hidden sm:inline">15-Day Mosaic</span>
+            <span id="current-interval-label-mobile" class="sm:hidden font-mono text-[11px]">15D</span>
+            <svg class="w-3 h-3 text-white/60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <!-- Interval Selector Popover Menu -->
+          <div id="interval-popover" class="absolute right-0 top-full mt-2 w-52 sm:w-56 bg-black text-white rounded-2xl border border-white/20 shadow-2xl p-3 hidden z-50 text-xs">
+            <div>
+              <div class="text-[10px] font-mono uppercase tracking-wider text-white/60 mb-1.5 px-2">Days</div>
+              <div class="grid grid-cols-3 gap-1">
+                <button type="button" data-action="set-days" data-days="7" id="int-btn-7" aria-pressed="false" class="int-btn h-11 rounded-lg text-white/70 hover:bg-white/10 text-center font-mono">7D</button>
+                <button type="button" data-action="set-days" data-days="15" id="int-btn-15" aria-pressed="true" class="int-btn h-11 rounded-lg bg-white text-black font-semibold text-center font-mono">15D</button>
+                <button type="button" data-action="set-days" data-days="30" id="int-btn-30" aria-pressed="false" class="int-btn h-11 rounded-lg text-white/70 hover:bg-white/10 text-center font-mono">30D</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discreet Info Button in Gallery Header -->
+        <button type="button" data-action="open-info" title="About & Project Info" aria-label="About Sky Palette" class="info-button w-11 h-11 rounded-full bg-black/80 hover:bg-black backdrop-blur-md text-white/70 hover:text-white flex items-center justify-center transition-colors shadow-2xl cursor-pointer">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 11v5"/>
+            <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- GALLERY LOCATION SEARCH MODAL (Light Variant)            -->
+  <!-- ======================================================== -->
+  <div id="gallery-search-modal" class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="gallery-search-title">
+    <div data-action="close-gallery-search" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-lg bg-white text-neutral-900 rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 p-6 flex flex-col space-y-4">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
+        <div>
+          <h2 id="gallery-search-title" class="text-base font-semibold text-neutral-900">Search location</h2>
+          <p class="text-xs text-neutral-500">Switch the gallery to another city</p>
+        </div>
+        <button type="button" data-action="close-gallery-search" aria-label="Close search dialog" class="w-11 h-11 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Search Bar: White Background with Black Content -->
+      <div class="search-field search-field--light search-pill search-pill-light relative flex items-center bg-white text-black rounded-full h-[52px] px-5 transition-colors">
+        <label for="modal-city-search-input" class="sr-only">Search city</label>
+        <svg class="w-4 h-4 text-neutral-500 mr-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          type="text"
+          id="modal-city-search-input"
+          placeholder="Search the location of your sky"
+          autocomplete="off"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="modal-city-dropdown"
+          aria-expanded="false"
+          class="w-full h-full min-h-11 bg-transparent border-none text-black placeholder:text-neutral-500 placeholder:text-xs sm:placeholder:text-sm text-sm focus:outline-none font-medium"
+        />
+      </div>
+
+      <!-- Autocomplete list in modal -->
+      <div id="modal-city-dropdown" role="listbox" aria-label="City results" class="rounded-2xl divide-y divide-neutral-100 bg-white shadow-xl max-h-56 overflow-y-auto hidden"></div>
+
+      <!-- Quick Picks -->
+      <div class="space-y-2 pt-1">
+        <span class="text-xs text-neutral-500 font-mono tracking-wider">POPULAR SKIES</span>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button type="button" data-action="pick-city" data-query="Bucharest" class="min-h-11 px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Bucharest (HQ)</span>
+            <span id="pick-num-bucharest" class="text-[10px] text-neutral-500 font-mono">44.4°N</span>
+          </button>
+          <button type="button" data-action="pick-city" data-query="Tokyo" class="min-h-11 px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Tokyo</span>
+            <span id="pick-num-tokyo" class="text-[10px] text-neutral-500 font-mono">35.6°N</span>
+          </button>
+          <button type="button" data-action="pick-city" data-query="Reykjavik" class="min-h-11 px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Reykjavik</span>
+            <span id="pick-num-reykjavik" class="text-[10px] text-neutral-500 font-mono">64.1°N</span>
+          </button>
+          <button type="button" data-action="pick-city" data-query="Paris" class="min-h-11 px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Paris</span>
+            <span id="pick-num-paris" class="text-[10px] text-neutral-500 font-mono">48.8°N</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 3: DAY DETAIL (Full White, No Top Bar, Back Btn)  -->
+  <!-- ======================================================== -->
+  <section id="screen-detail" class="app-screen detail-screen text-[#111827] select-none" aria-label="Day detail">
+
+    <div class="detail-content max-w-4xl mx-auto w-full flex flex-col gap-2 sm:gap-3 px-3 sm:px-6 md:px-8 pt-3 sm:pt-5 pb-28 sm:pb-24">
+
+      <!-- Minimal Header Info with Back to Gallery Button (Overflow-Proof) -->
+      <div class="flex items-center justify-between pt-1 pb-1 shrink-0 gap-2 min-w-0">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <button type="button" data-action="nav" data-screen="gallery" class="min-h-11 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition-colors shrink-0">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>Gallery</span>
+          </button>
+
+          <div class="min-w-0">
+            <h2 id="detail-title" class="text-sm sm:text-base md:text-lg font-semibold text-black tracking-tight truncate">
+              —
+            </h2>
+            <p id="detail-time-phase" class="text-[11px] sm:text-xs text-neutral-500 font-mono tabular-nums truncate">
+              Loading palette…
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <!-- Reference Photo Mode Indicator -->
+          <div id="ref-mode-badge" hidden class="flex items-center gap-1.5 sm:gap-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-800 font-medium border border-black/10 text-[10px] sm:text-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" aria-hidden="true"></span>
+              <span id="ref-mode-text">Reference photo</span>
+            </span>
+            <button type="button" data-action="clear-reference" class="min-h-11 min-w-11 px-2 text-[11px] sm:text-xs text-neutral-500 hover:text-black underline underline-offset-2">
+              Reset
+            </button>
+          </div>
+
+          <!-- Discreet Info Button in Day Detail -->
+          <button type="button" data-action="open-info" title="About & Project Info" aria-label="About Sky Palette" class="info-button w-11 h-11 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 hover:text-black flex items-center justify-center transition-colors cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 11v5"/>
+              <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- HERO VIEWPORT: Live Simulation & Reference Image Split/Display -->
+      <div class="relative w-full h-[26dvh] sm:h-[30dvh] md:h-[34dvh] min-h-[160px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs shrink-0 bg-neutral-100">
+
+        <!-- Live Gradient Renderer -->
+        <div id="sky-renderer" class="absolute inset-0 w-full h-full transition-[background] duration-150 ease-out"></div>
+
+        <!-- Subtle Sun Orb -->
+        <div id="sun-orb" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 sm:w-32 sm:h-32 rounded-full pointer-events-none filter blur-xl opacity-40 transition-[top,left,background,opacity] duration-200"></div>
+
+        <!-- REFERENCE IMAGE OVERLAY PANEL (Appears when community photo clicked) -->
+        <div id="ref-photo-overlay" aria-hidden="true" class="absolute inset-y-0 right-0 w-full sm:w-1/2 bg-black/85 backdrop-blur-md text-white p-3 sm:p-4 transition-transform duration-300 translate-x-full flex flex-col justify-between border-l border-white/10 z-20">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-mono text-white/70 text-[11px] sm:text-xs" id="ref-photo-time">—</span>
+            <button type="button" data-action="clear-reference" aria-label="Remove reference photo" class="w-11 h-11 flex items-center justify-center text-white/60 hover:text-white rounded-full">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div class="my-auto rounded-xl sm:rounded-2xl overflow-hidden aspect-[16/10] relative shadow-lg border border-white/20 bg-neutral-900">
+            <img id="ref-photo-image" alt="" class="w-full h-full object-cover" />
+            <div class="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white px-2 py-1 sm:py-1.5 text-[9px] sm:text-[10px] font-mono truncate" id="ref-photo-location">—</div>
+          </div>
+
+          <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-white/70">
+            <span id="ref-photo-author">—</span>
+            <span class="text-emerald-400 font-mono">Community</span>
+          </div>
+        </div>
+
+        <!-- Live Metrics HUD inside Sky Viewport -->
+        <div class="absolute top-2.5 left-3 sm:top-4 sm:left-4 flex flex-col gap-0.5 text-white z-10">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <span id="hud-time" class="text-xl sm:text-2xl md:text-3xl font-light font-mono tabular-nums">—:—</span>
+            <span id="hud-phase-pill" class="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium bg-black/40 backdrop-blur-sm border border-white/20 text-white">
+              —
+            </span>
+          </div>
+          <span id="hud-solar-metrics" class="text-[10px] sm:text-[11px] text-white/80 font-mono tabular-nums">
+            Reading solar position…
+          </span>
+        </div>
+
+        <div class="absolute bottom-2.5 left-3 sm:bottom-4 sm:left-4 text-white/80 text-[10px] sm:text-[11px] font-mono z-10">
+          <div>Solar geometry · palette model</div>
+        </div>
+      </div>
+
+      <!-- Sun times for the selected day -->
+      <div class="flex items-center justify-between gap-2 px-1 text-[10px] sm:text-[11px] font-mono text-neutral-500 shrink-0">
+        <span>Sunrise <span id="detail-sunrise" class="text-neutral-800 tabular-nums">—</span></span>
+        <span>Golden <span id="detail-golden" class="text-neutral-800 tabular-nums">—</span></span>
+        <span>Sunset <span id="detail-sunset" class="text-neutral-800 tabular-nums">—</span></span>
+      </div>
+
+      <!-- 5 PALETTE SWATCHES (Clean, unboxed without container cards) -->
+      <div class="space-y-1 shrink-0 pt-1">
+        <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-neutral-500 font-mono">
+          <span>5-SWATCH PROFILE</span>
+          <span>Tap to copy</span>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5 sm:gap-3">
+
+          <button type="button" data-action="copy-hex" data-target="zenith-hex" class="copy-swatch group text-center min-w-0 rounded-xl">
+            <div id="swatch-zenith" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02] bg-neutral-200"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Zenith</div>
+            <div id="zenith-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">—</div>
+          </button>
+
+          <button type="button" data-action="copy-hex" data-target="midsky-hex" class="copy-swatch group text-center min-w-0 rounded-xl">
+            <div id="swatch-midsky" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02] bg-neutral-200"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Mid-Sky</div>
+            <div id="midsky-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">—</div>
+          </button>
+
+          <button type="button" data-action="copy-hex" data-target="horizon-hex" class="copy-swatch group text-center min-w-0 rounded-xl">
+            <div id="swatch-horizon" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02] bg-neutral-200"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Horizon</div>
+            <div id="horizon-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">—</div>
+          </button>
+
+          <button type="button" data-action="copy-hex" data-target="sunglow-hex" class="copy-swatch group text-center min-w-0 rounded-xl">
+            <div id="swatch-sunglow" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02] bg-neutral-200"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Sun Glow</div>
+            <div id="sunglow-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">—</div>
+          </button>
+
+          <button type="button" data-action="copy-hex" data-target="cloudtint-hex" class="copy-swatch group text-center min-w-0 rounded-xl">
+            <div id="swatch-cloudtint" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02] bg-neutral-200"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Cloud Tint</div>
+            <div id="cloudtint-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">—</div>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- HORIZONTAL RULER JOG-DIAL SCRUBBER FOR DAY DETAIL        -->
+      <!-- ======================================================== -->
+      <div id="detail-ruler-container" class="relative z-20 flex flex-col items-center select-none w-full max-w-sm mx-auto px-2 pt-1 shrink-0">
+
+        <!-- Controls row: Play button + Time Display + Quick Phase Jumps -->
+        <div class="w-full flex items-center justify-between mb-1 px-1 sm:px-2 select-none">
+          <button type="button" id="timelapse-btn" data-action="timelapse" aria-label="Play timelapse" aria-pressed="false" class="w-11 h-11 shrink-0 rounded-full bg-black hover:bg-neutral-800 text-white flex items-center justify-center transition-transform active:scale-95 shadow-sm shrink-0">
+            <svg id="play-icon" class="w-3 h-3 ml-0.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="pause-icon" class="w-3 h-3 hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+
+          <!-- Centered Time Display directly above center tick (Expands smoothly on drag) -->
+          <div class="h-7 flex items-center justify-center select-none">
+            <span
+              id="detail-ruler-time-display"
+              class="font-sans font-semibold tracking-tight text-black text-xs sm:text-sm transition-all duration-150 tabular-nums"
+            >—:—</span>
+          </div>
+
+          <!-- Quick Jump Buttons (overflow-proof) -->
+          <div class="flex items-center gap-1 text-[10px] sm:text-[11px]">
+            <button type="button" data-action="detail-jump" data-kind="noon" class="jump-btn min-w-11 min-h-11 px-2.5 rounded-full inline-flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">12:00</button>
+            <button type="button" data-action="detail-jump" data-kind="golden" class="jump-btn min-w-11 min-h-11 px-2.5 rounded-full inline-flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">Golden</button>
+            <button type="button" data-action="detail-jump" data-kind="sunset" class="jump-btn min-w-11 min-h-11 px-2.5 rounded-full inline-flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">Sunset</button>
+          </div>
+        </div>
+
+        <!-- Ruler Tape Viewport with Soft Left/Right Fade Mask -->
+        <div
+          id="detail-ruler-viewport"
+          role="slider"
+          tabindex="0"
+          aria-label="Detail time of day"
+          aria-valuemin="0"
+          aria-valuemax="1440"
+          aria-valuenow="0"
+          aria-valuetext="Loading"
+          class="ruler-viewport relative w-64 sm:w-72 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none overflow-hidden"
+        >
+          <!-- Horizontal Moving Tape -->
+          <div id="detail-ruler-tape" class="ruler-tape absolute top-0 bottom-0 flex items-center will-change-transform" data-tone="dark" style="left: 50%; transform: translateX(0px);">
+            <!-- Discrete Ticks generated dynamically by JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <p id="detail-note" hidden class="text-center text-[10px] sm:text-[11px] font-mono text-neutral-500" role="status"></p>
+
+      <!-- COMMUNITY PHOTOS STRIP -->
+      <div id="detail-photos-section" class="space-y-1.5 shrink-0 pt-1">
+        <div class="flex items-center justify-between text-xs gap-2">
+          <span class="font-medium text-black">Community photos nearby</span>
+          <span class="text-[10px] sm:text-[11px] font-mono text-neutral-500">Tap for reference</span>
+        </div>
+        <p class="text-[10px] font-mono text-neutral-500">Contribute with the Submit button in the bottom navigation.</p>
+
+        <div id="detail-photos" class="grid grid-cols-4 gap-2 sm:gap-3"></div>
+
+        <div id="detail-photos-empty" hidden class="rounded-2xl border border-dashed border-black/20 bg-neutral-50 px-4 py-5 text-center">
+          <svg class="w-6 h-6 mx-auto text-neutral-400 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p id="detail-photos-empty-title" class="text-xs sm:text-sm font-medium text-black">No community captures for this day yet — be the first</p>
+          <p id="detail-photos-empty-note" class="mt-1 text-[11px] text-neutral-500">Share a photo of this sky and it can appear here after review.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 4: SUBMIT FLOW MODAL                              -->
+  <!-- ======================================================== -->
+  <div id="submit-modal" class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+    <div data-action="close-submit" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 flex flex-col">
+      <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5 shrink-0">
+        <div>
+          <h2 id="submit-title" class="text-base font-semibold text-black">Share a photo of your sky</h2>
+          <p class="text-xs text-neutral-500 mt-0.5">Anonymous · pending review</p>
+        </div>
+        <button type="button" data-action="close-submit" aria-label="Close submit dialog" class="w-11 h-11 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form id="submit-form" class="modal-body px-6 py-5 space-y-4" novalidate>
+        <label for="sky-file-input" id="upload-dropzone" class="block border-2 border-dashed border-black/15 hover:border-black bg-neutral-50/80 hover:bg-neutral-100/80 rounded-2xl p-4 sm:p-5 text-center cursor-pointer transition-colors group focus-within:border-black">
+          <input type="file" id="sky-file-input" name="photo" class="sr-only" data-change="sky-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
+          <div id="upload-empty">
+            <div class="w-10 h-10 mx-auto rounded-full bg-white border border-black/10 flex items-center justify-center text-black mb-2 shadow-xs group-hover:scale-105 transition-transform">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="text-sm font-medium text-black">No image selected</p>
+            <p class="text-xs text-neutral-500 mt-0.5">JPG, PNG or WebP · up to 30 MB</p>
+            <p class="text-[11px] text-neutral-500 mt-1.5 font-mono">Scaled to 1600 px · metadata stripped server-side</p>
+          </div>
+
+          <div id="upload-preview" hidden class="text-left">
+            <div class="flex items-center gap-3">
+              <img id="submit-preview-image" alt="Selected sky photo preview" class="w-20 h-20 rounded-xl object-cover bg-neutral-200 shrink-0" />
+              <div class="min-w-0 flex-1">
+                <p id="submit-file-name" class="text-xs font-semibold text-black truncate">—</p>
+                <p id="submit-file-meta" class="text-[11px] font-mono text-neutral-500 mt-0.5">—</p>
+                <p class="text-[11px] text-emerald-700 mt-1">Ready to upload</p>
+              </div>
+            </div>
+            <p class="mt-2 text-[10px] font-mono text-neutral-500 text-center">Tap to choose a different photo</p>
+          </div>
+        </label>
+
+        <p class="text-[10px] text-neutral-500 leading-relaxed">If your photo includes GPS, we use it to suggest the location. It is removed before upload.</p>
+
+        <!-- Location search, capture time and handle share one field component -->
+        <div class="space-y-2">
+          <div class="relative">
+            <div class="search-field search-field--form field-shell w-full">
+              <label for="submit-location-input" class="sr-only">City or place</label>
+              <svg class="w-4 h-4 text-neutral-500 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <input
+                type="text"
+                id="submit-location-input"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="submit-location-dropdown"
+                aria-expanded="false"
+                autocomplete="off"
+                placeholder="Search the location of your sky"
+                class="field-input"
+              />
+              <span id="from-photo-badge" hidden title="Read from your photo’s GPS; the metadata is removed before upload." aria-label="Read from your photo’s GPS; the metadata is removed before upload." class="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-mono font-semibold text-emerald-800">From photo</span>
+              <svg class="w-3.5 h-3.5 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+            </div>
+            <div id="submit-location-dropdown" role="listbox" aria-label="Submit location results" class="absolute left-0 right-0 top-full mt-2 z-40 rounded-2xl divide-y divide-neutral-100 bg-white shadow-2xl max-h-52 overflow-y-auto hidden"></div>
+          </div>
+          <div id="photo-location-hint" hidden class="flex justify-end">
+            <button type="button" data-action="use-photo-location" class="min-h-11 px-3 rounded-full bg-white border border-black/10 text-[10px] font-mono font-semibold text-black hover:bg-neutral-50 transition-colors">Use photo location</button>
+          </div>
+
+          <div class="relative">
+            <div id="submit-time-stepper" class="field-shell time-stepper w-full" role="group" aria-label="Capture time">
+              <svg class="w-4 h-4 text-neutral-500 mr-1 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <button type="button" class="time-seg is-selected" data-time-hour aria-label="Hour" aria-pressed="true">—</button>
+              <span class="time-colon" aria-hidden="true">:</span>
+              <button type="button" class="time-seg" data-time-minute aria-label="Minute" aria-pressed="false">—</button>
+              <div class="flex items-center gap-1 ml-auto">
+                <button type="button" data-time-decrease aria-label="Decrease selected time" class="time-step-btn">−</button>
+                <button type="button" data-time-increase aria-label="Increase selected time" class="time-step-btn">+</button>
+              </div>
+              <button type="button" id="submit-date-trigger" data-action="toggle-capture-date" aria-expanded="false" aria-haspopup="dialog" class="time-date">Nov 14</button>
+            </div>
+
+            <div id="submit-date-popover" hidden class="absolute right-0 top-full mt-2 z-40 w-64 max-w-[calc(100vw-3rem)] rounded-2xl bg-white border border-black/10 shadow-2xl p-3 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-black">Capture date</span>
+                <button type="button" data-action="close-capture-date" aria-label="Close date selector" class="w-11 h-11 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <label for="submit-date-input" class="block text-[10px] font-mono uppercase tracking-wider text-neutral-500">
+                Date
+                <input type="date" id="submit-date-input" class="mt-1 w-full min-h-11 rounded-xl border border-black/10 bg-neutral-50 px-3 text-xs text-black font-mono focus:outline-none focus:border-black" />
+              </label>
+              <button type="button" data-action="apply-capture-date" class="w-full min-h-11 rounded-full bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors">Done</button>
+            </div>
+          </div>
+
+          <!-- Contributor Handle -->
+          <div class="field-shell w-full justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-neutral-500 text-xs shrink-0">Handle:</span>
+              <span id="contributor-handle" class="font-mono tabular-nums font-semibold text-black truncate">—</span>
+            </div>
+            <button type="button" data-action="randomize-handle" title="Generate another anonymous handle" class="h-11 min-h-0 text-xs text-neutral-500 hover:text-black flex items-center gap-1.5 transition-colors px-2.5 rounded-full hover:bg-neutral-200/60 font-medium shrink-0">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Regen</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Local palette preview -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between text-xs px-0.5">
+            <span class="font-semibold text-black tracking-tight text-xs sm:text-sm">Colour preview</span>
+            <span id="submit-color-status" class="text-[10px] text-neutral-500 font-mono font-medium flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-300" aria-hidden="true"></span>
+              Awaiting photo
+            </span>
+          </div>
+
+          <div id="submit-palette-empty" class="rounded-2xl bg-neutral-50/70 px-4 py-3 text-center">
+            <div class="flex items-center justify-center gap-1.5 mb-2" aria-hidden="true">
+              <span class="w-4 h-7 rounded-md bg-neutral-200"></span>
+              <span class="w-4 h-7 rounded-md bg-neutral-300"></span>
+              <span class="w-4 h-7 rounded-md bg-neutral-200"></span>
+              <span class="w-4 h-7 rounded-md bg-neutral-300"></span>
+              <span class="w-4 h-7 rounded-md bg-neutral-200"></span>
+            </div>
+            <p class="text-xs font-medium text-black">Colours appear here</p>
+            <p class="mt-0.5 text-[11px] text-neutral-500">Choose a photo to preview its five-swatch palette.</p>
+          </div>
+
+          <div id="submit-palette-result" hidden class="flex flex-col gap-3">
+            <div id="submit-palette-row" class="grid grid-cols-5 gap-1.5" aria-hidden="true">
+              <div id="submit-swatch-0" class="h-9 rounded-lg bg-neutral-200"></div>
+              <div id="submit-swatch-1" class="h-9 rounded-lg bg-neutral-200"></div>
+              <div id="submit-swatch-2" class="h-9 rounded-lg bg-neutral-200"></div>
+              <div id="submit-swatch-3" class="h-9 rounded-lg bg-neutral-200"></div>
+              <div id="submit-swatch-4" class="h-9 rounded-lg bg-neutral-200"></div>
+            </div>
+            <div class="grid grid-cols-5 gap-1.5 text-center font-mono text-[10px] text-neutral-600">
+              <span id="submit-color-0">—</span>
+              <span id="submit-color-1">—</span>
+              <span id="submit-color-2">—</span>
+              <span id="submit-color-3">—</span>
+              <span id="submit-color-4">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Turnstile -->
+        <div id="turnstile-box" class="rounded-2xl px-1 py-1">
+          <div id="turnstile-container" class="min-h-0"></div>
+          <p id="turnstile-note" hidden class="text-[10px] text-red-700 leading-relaxed"></p>
+        </div>
+
+        <!-- Progress / result -->
+        <div id="submit-progress" hidden role="status" aria-live="polite" class="rounded-2xl bg-neutral-50 border border-black/10 px-4 py-3">
+          <div class="flex items-center justify-between text-[11px] font-mono text-neutral-700">
+            <span id="submit-progress-text">Preparing photo…</span>
+            <span id="submit-progress-percent" class="tabular-nums">0%</span>
+          </div>
+          <div class="mt-2 h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+            <div id="submit-progress-bar" class="h-full w-0 bg-black transition-[width] duration-300"></div>
+          </div>
+        </div>
+
+        <div id="submit-error" hidden role="alert" class="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-[11px] text-red-800 leading-relaxed">
+          <p id="submit-error-text"></p>
+          <p id="submit-error-meta" class="mt-1 font-mono text-[10px] text-red-700/70"></p>
+        </div>
+
+        <div id="submit-success" hidden role="status" class="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-4">
+          <p class="text-sm font-semibold text-emerald-900">Submitted for review</p>
+          <p class="mt-1 text-[11px] text-emerald-800 leading-relaxed">Your photo is queued as <strong>pending review</strong>. It is not published yet.</p>
+          <div class="mt-2 flex items-center gap-2 font-mono text-[11px] text-emerald-900">
+            <span class="text-emerald-700">Handle</span>
+            <span id="submit-success-handle" class="font-semibold">—</span>
+          </div>
+          <button type="button" data-action="submit-reset" class="mt-3 min-h-11 px-4 rounded-full bg-white border border-emerald-200 text-emerald-900 text-xs font-semibold">Submit another</button>
+        </div>
+
+        <button type="submit" id="submit-btn" class="w-full min-h-12 py-3 px-6 rounded-full bg-black hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+          <span id="submit-btn-label">Submit for review</span>
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+
+        <div class="flex flex-col items-center gap-2 text-[11px] text-neutral-500 text-center leading-relaxed">
+          <span>No account needed · Photos are reviewed before publication</span>
+          <span id="bot-status" title="Protected by Cloudflare Turnstile. The check runs when this dialog opens." aria-describedby="turnstile-help" class="inline-flex items-center gap-1.5 text-[10px] font-mono text-neutral-600">
+            <svg class="w-3.5 h-3.5 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.1 7 10 4-1.9 7-5.5 7-10V6z"/><path d="m9 11.5 2 2 4-4"/></svg>
+            <span id="bot-status-label">Protected</span>
+            <span id="turnstile-spinner" hidden class="w-3 h-3 rounded-full border-2 border-neutral-300 border-t-neutral-700 animate-spin" aria-hidden="true"></span>
+            <span id="turnstile-state" class="sr-only" role="status" aria-live="polite">waiting</span>
+          </span>
+          <p id="turnstile-help" class="sr-only">Cloudflare Turnstile bot check. It runs automatically when this dialog opens.</p>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 5: SHARE MODAL (4 Clean Distinct Card Styles)     -->
+  <!-- ======================================================== -->
+  <div id="share-modal" class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <div data-action="close-share" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 flex flex-col">
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5 shrink-0">
+        <div>
+          <h2 id="share-title" class="text-base font-semibold text-black">Share sky card</h2>
+          <p class="text-xs text-neutral-500">Pick a card style, then save or share</p>
+        </div>
+        <button type="button" data-action="close-share" aria-label="Close share dialog" class="w-11 h-11 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body px-6 py-4 space-y-4">
+
+        <!-- Style Switcher (4 Distinct Archetypes) -->
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <span class="text-neutral-500 font-medium shrink-0">Style</span>
+          <div class="inline-flex p-0.5 rounded-full bg-neutral-100 border border-black/5 text-[11px] font-medium overflow-x-auto no-scrollbar">
+            <button type="button" data-action="card-style" data-style="studio" id="btn-style-studio" aria-pressed="true" class="style-btn min-h-11 px-3 py-1 rounded-full bg-black text-white shadow-sm transition-colors">Studio</button>
+            <button type="button" data-action="card-style" data-style="telemetry" id="btn-style-telemetry" aria-pressed="false" class="style-btn min-h-11 px-3 py-1 rounded-full text-neutral-600 transition-colors">Telemetry</button>
+            <button type="button" data-action="card-style" data-style="horizon" id="btn-style-horizon" aria-pressed="false" class="style-btn min-h-11 px-3 py-1 rounded-full text-neutral-600 transition-colors">Horizon</button>
+            <button type="button" data-action="card-style" data-style="monolith" id="btn-style-monolith" aria-pressed="false" class="style-btn min-h-11 px-3 py-1 rounded-full text-neutral-600 transition-colors">Monolith</button>
+          </div>
+        </div>
+
+        <!-- CARD CONTAINER (Dynamically Populated by Style) -->
+        <div id="share-card-container" class="w-full transition-all">
+          <canvas id="share-canvas" width="1080" height="1350" class="hidden" aria-hidden="true"></canvas>
+
+          <!-- 1. STUDIO VARIANT (Light / Architectural / Minimalist Editorial) -->
+          <div id="card-variant-studio" class="card-variant is-active w-full rounded-2xl p-6 bg-[#FAFAFC] text-[#111827] border border-black/10 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <!-- Header -->
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="text-[10px] font-mono tracking-widest uppercase text-neutral-500">Sky Palette</span>
+                <h4 class="text-2xl font-bold tracking-tight text-black mt-0.5" id="studio-city">—</h4>
+                <p class="text-[11px] text-neutral-500 font-mono" id="studio-coords">—</p>
+              </div>
+              <div class="text-right">
+                <span class="px-2.5 py-1 rounded-full bg-black text-white text-[10px] font-mono font-medium" id="studio-date">—</span>
+              </div>
+            </div>
+
+            <!-- 5 Architectural Vertical Color Columns -->
+            <div class="my-4 flex-1 flex flex-col justify-center">
+              <div class="w-full h-36 rounded-xl overflow-hidden grid grid-cols-5 gap-0 shadow-md border border-black/5 relative">
+                <div class="h-full w-full swatch-val-0" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#D4D4D8;"></div>
+              </div>
+              <div class="grid grid-cols-5 gap-1 mt-2 text-center text-[9px] font-mono text-neutral-500">
+                <span class="hex-val-0" data-hex="0">—</span>
+                <span class="hex-val-1" data-hex="1">—</span>
+                <span class="hex-val-2" data-hex="2">—</span>
+                <span class="hex-val-3" data-hex="3">—</span>
+                <span class="hex-val-4" data-hex="4">—</span>
+              </div>
+            </div>
+
+            <!-- Footer: Clean Wordmark Only -->
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-neutral-500 border-t border-black/5">
+              <span id="studio-time">—</span>
+              <span class="text-black font-semibold">skypalette.app</span>
+            </div>
+          </div>
+
+          <!-- 2. TELEMETRY VARIANT (Dark Mode / Monospaced Strava Athleisure) -->
+          <div id="card-variant-telemetry" class="card-variant w-full rounded-2xl p-6 bg-[#0B0D12] text-white border border-white/15 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <div>
+              <div class="flex items-center gap-1.5 text-[10px] font-mono tracking-widest uppercase text-emerald-400 mb-0.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Solar Telemetry Log</span>
+              </div>
+              <h4 class="text-xl font-bold font-mono tracking-tight text-white" id="telemetry-city">—</h4>
+              <p class="text-[10px] font-mono text-white/70" id="telemetry-coords">— · ROMANIA</p>
+            </div>
+
+            <div class="my-3">
+              <div class="w-full h-24 rounded-lg overflow-hidden grid grid-cols-5 gap-0 shadow-lg border border-white/10 relative">
+                <div class="h-full w-full swatch-val-0" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#D4D4D8;"></div>
+                <div class="absolute top-[80%] inset-x-0 h-px bg-white/30"></div>
+              </div>
+              <div class="grid grid-cols-5 gap-1 mt-1.5 text-center text-[9px] font-mono text-white/60">
+                <span class="hex-val-0" data-hex="0">—</span>
+                <span class="hex-val-1" data-hex="1">—</span>
+                <span class="hex-val-2" data-hex="2">—</span>
+                <span class="hex-val-3" data-hex="3">—</span>
+                <span class="hex-val-4" data-hex="4">—</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-center font-mono text-xs">
+              <div>
+                <div class="text-[9px] uppercase text-white/60">Sunset Peak</div>
+                <div class="text-sm font-bold text-white mt-0.5" id="telemetry-sunset">—</div>
+              </div>
+              <div class="border-l border-white/10">
+                <div class="text-[9px] uppercase text-white/60">Solar Arc</div>
+                <div class="text-sm font-bold text-amber-300 mt-0.5" id="telemetry-elevation">—</div>
+              </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-white/60">
+              <span id="telemetry-date">—</span>
+              <span class="text-white/70">skypalette.app</span>
+            </div>
+          </div>
+
+          <!-- 3. HORIZON VARIANT (Warm Gallery Art Print / Serif) -->
+          <div id="card-variant-horizon" class="card-variant w-full rounded-2xl p-6 bg-[#0E111A] text-amber-50 border border-white/15 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none" style="background: radial-gradient(ellipse at bottom, rgba(224,96,56,0.25) 0%, #0E111A 70%);">
+            <div>
+              <span class="text-[10px] font-mono uppercase tracking-widest text-amber-200/90">Atelier Exhibition</span>
+              <h4 class="text-2xl font-serif italic text-amber-100 mt-0.5" id="horizon-title">Sky above —</h4>
+              <p class="text-[11px] text-white/70 font-mono" id="horizon-phase">—</p>
+            </div>
+
+            <!-- Soft Rounded Palette Capsule -->
+            <div class="my-4">
+              <div class="w-full h-32 rounded-2xl overflow-hidden grid grid-cols-5 gap-0 shadow-2xl border border-white/20">
+                <div class="h-full w-full swatch-val-0" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#D4D4D8;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#D4D4D8;"></div>
+              </div>
+              <div class="flex justify-between items-center px-1 mt-2 text-[10px] font-mono text-amber-100/80">
+                <span>Zenith</span>
+                <span>Horizon</span>
+                <span>Sun Glow</span>
+              </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-amber-100/80 border-t border-white/10">
+              <span id="horizon-date">—</span>
+              <span class="tracking-wider">skypalette.app</span>
+            </div>
+          </div>
+
+          <!-- 4. MONOLITH VARIANT (Stark Bold Color Field) -->
+          <div id="card-variant-monolith" class="card-variant w-full rounded-2xl p-0 bg-black text-white border border-white/20 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <!-- 75% Edge-to-Edge Color Slabs -->
+            <div class="w-full h-[74%] grid grid-cols-5 gap-0">
+              <div class="h-full w-full swatch-val-0" style="background:#D4D4D8;"></div>
+              <div class="h-full w-full swatch-val-1" style="background:#D4D4D8;"></div>
+              <div class="h-full w-full swatch-val-2" style="background:#D4D4D8;"></div>
+              <div class="h-full w-full swatch-val-3" style="background:#D4D4D8;"></div>
+              <div class="h-full w-full swatch-val-4" style="background:#D4D4D8;"></div>
+            </div>
+
+            <!-- Stark Bottom Bar -->
+            <div class="p-5 flex items-center justify-between bg-black text-white">
+              <div>
+                <h4 class="text-base font-bold tracking-tight" id="monolith-city">—</h4>
+                <div class="text-[10px] font-mono text-white/70" id="monolith-sub">—</div>
+              </div>
+              <div class="text-right">
+                <span class="text-[11px] font-mono font-medium text-white/90">skypalette.app</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Export buttons -->
+        <div class="space-y-2 pt-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-action="copy-link" class="min-h-12 py-2.5 px-4 rounded-full bg-black text-white hover:bg-neutral-800 text-xs font-medium transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-[0.98]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy link</span>
+            </button>
+            <button type="button" data-action="download-card" class="min-h-12 py-2.5 px-4 rounded-full bg-white hover:bg-neutral-50 text-black text-xs font-medium border border-black/10 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Save PNG</span>
+            </button>
+          </div>
+
+          <div id="share-social-row" class="flex flex-wrap items-center justify-center gap-2 pt-2">
+            <button type="button" id="share-x" data-action="share-social" data-platform="x" aria-label="Share on X" title="Share on X" class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </button>
+            <button type="button" id="share-facebook" data-action="share-social" data-platform="facebook" aria-label="Share on Facebook" title="Share on Facebook" class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 22v-8h2.7l.4-3.1h-3.1V8.9c0-.9.25-1.5 1.55-1.5h1.65V4.6c-.3-.04-1.3-.13-2.45-.13-2.4 0-4.05 1.47-4.05 4.17v2.33H7.5V14h2.7v8z"/></svg>
+            </button>
+            <button type="button" id="share-whatsapp" data-action="share-social" data-platform="whatsapp" aria-label="Share on WhatsApp" title="Share on WhatsApp" class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.3 4.8 4.9-1.3A9.9 9.9 0 1 0 12.04 2zm0 18.1a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-2.9.76.78-2.83-.2-.3a8.2 8.2 0 1 1 6.82 3.7zm4.5-6.13c-.25-.13-1.46-.72-1.69-.8-.22-.08-.39-.13-.55.13-.16.25-.64.8-.78.97-.14.16-.29.18-.54.06-.25-.13-1.04-.38-1.98-1.22-.73-.65-1.22-1.46-1.36-1.7-.14-.26-.02-.4.11-.52.11-.11.25-.29.37-.43.12-.15.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.13-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47c-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2s.86 2.32.98 2.48c.12.17 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.52.1.46-.07 1.46-.6 1.67-1.18.2-.58.2-1.07.14-1.17-.06-.11-.22-.17-.47-.3z"/></svg>
+            </button>
+            <button type="button" id="share-telegram" data-action="share-social" data-platform="telegram" aria-label="Share on Telegram" title="Share on Telegram" class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.7 4.3 2.9 11.6c-1 .4-1 1 .1 1.3l4.7 1.5 1.8 5.5c.2.7.4.8 1 .3l2.6-2.2 5 3.7c.9.5 1.5.3 1.7-.8l3.1-14.6c.2-1-.4-1.4-1.2-1zm-3.9 3.4-7.6 6.9-.3 3-1.4-4.3 9.3-5.6z"/></svg>
+            </button>
+            <button type="button" id="share-instagram" data-action="share-instagram" aria-label="Share Story card to Instagram" title="Share Story card to Instagram" class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            </button>
+            <span id="share-divider" class="w-px h-5 bg-black/15 shrink-0" aria-hidden="true"></span>
+            <button type="button" id="share-native" data-action="share-card" aria-label="Share card with device" title="Share card with device" disabled class="w-12 h-12 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors disabled:bg-neutral-100 disabled:opacity-40 flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            </button>
+          </div>
+          <p id="share-status" class="sr-only" role="status" aria-live="polite"></p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 6: PROJECT INFO, TECH, LICENSES & PRIVACY MODAL   -->
+  <!-- ======================================================== -->
+  <div id="info-modal" class="modal-shell" role="dialog" aria-modal="true" aria-labelledby="info-title">
+    <div data-action="close-info" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-xl bg-white text-neutral-900 rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 flex flex-col">
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-black/5 shrink-0 bg-white">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-mono text-xs font-bold shadow-xs">
+            SP
+          </div>
+          <div>
+            <h2 id="info-title" class="text-base font-semibold text-black tracking-tight flex items-center gap-2">
+              Sky Palette
+              <span id="info-version" class="px-2 py-0.5 rounded-full bg-neutral-100 border border-black/10 text-[10px] font-mono font-medium text-neutral-600">v1.0.0</span>
+            </h2>
+            <p class="text-xs text-neutral-500 font-sans">Physical sky colour engine & solar architecture</p>
+          </div>
+        </div>
+        <button type="button" data-action="close-info" aria-label="Close info dialog" class="w-11 h-11 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Scrollable Content -->
+      <div class="modal-body px-6 py-5 space-y-6 text-xs text-neutral-700 leading-relaxed">
+
+        <!-- 1. Description & Action Links -->
+        <div class="space-y-3">
+          <p class="text-sm text-neutral-900 font-medium leading-relaxed">
+            Sky Palette computes five-swatch sky palettes (Zenith, Mid-Sky, Horizon, Sun Glow, Cloud Tint) from solar geometry, live cloud layers and visibility. Community photos stay anonymous and are reviewed before publication.
+          </p>
+
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <!-- GitHub Repo -->
+            <a href="https://github.com/antoniocranga/sky-palette" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 min-h-11 px-3.5 py-2 rounded-full bg-black hover:bg-neutral-800 text-white font-medium transition-colors shadow-xs">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              <span>GitHub Repository</span>
+            </a>
+
+            <!-- Release Notes Anchor -->
+            <button type="button" data-action="scroll-info" data-section="release-notes-section" class="inline-flex items-center gap-1.5 min-h-11 px-3.5 py-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-medium transition-colors border border-black/10">
+              <svg class="w-3.5 h-3.5 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span>Release Notes</span>
+            </button>
+          </div>
+        </div>
+
+
+        <!-- 2. Technologies Used -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Core Technologies</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Hermite sky model</div>
+              <div class="text-[11px] text-neutral-500">C¹-continuous interpolation across solar elevation anchors, modulated by cloud cover and visibility.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">NOAA / Meeus solar geometry</div>
+              <div class="text-[11px] text-neutral-500">Solar elevation, azimuth, sunrise, sunset and golden-hour calculation by latitude and longitude.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Open-Meteo weather</div>
+              <div class="text-[11px] text-neutral-500">Live low, mid and high cloud cover plus visibility, without API keys.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Vite + TypeScript</div>
+              <div class="text-[11px] text-neutral-500">One hashed bundle, self-hosted fonts, Canvas export and CSS Grid. No third-party runtime requests.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Cloudflare D1 & R2 Storage</div>
+              <div class="text-[11px] text-neutral-500">Serverless SQLite for palettes and private object storage for reviewed community photos.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Cloudflare Edge & Analytics</div>
+              <div class="text-[11px] text-neutral-500">Edge compute, image moderation, Turnstile bot checks and cookie-free Web Analytics.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Usage Monitoring & Cloudflare Telemetry -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Usage Monitoring & Telemetry</h4>
+          <div class="p-3.5 rounded-2xl bg-neutral-50 border border-black/5 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="font-medium text-black text-xs">Cloudflare Web Analytics (Privacy-First)</span>
+            </div>
+            <p class="text-[11px] text-neutral-600 leading-relaxed">
+              To monitor application health, traffic volume, and performance (such as Largest Contentful Paint and interaction responsiveness), Sky Palette utilizes <strong>Cloudflare Web Analytics</strong>.
+            </p>
+            <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+              <li><strong>Zero Cookies:</strong> No cookies or client-side storage are ever set or read for telemetry.</li>
+              <li><strong>Zero Fingerprinting:</strong> No device fingerprints, canvas hashes, or cross-site tracking IDs.</li>
+              <li><strong>Zero Personal Data:</strong> IP addresses are never logged or stored. Aggregate metrics only.</li>
+              <li><strong>GDPR & ePrivacy Compliant:</strong> Does not require consent banners because no personal data is processed.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 4. Privacy & Cookies Policy -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Privacy & Cookies</h4>
+            <span class="text-[11px] font-mono text-emerald-600 font-medium">100% Cookie-Free</span>
+          </div>
+          <div class="space-y-2 text-[11px] text-neutral-600 leading-relaxed">
+            <p>
+              Sky Palette is built on strict data minimalism:
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-neutral-800">
+              <div class="p-2.5 rounded-xl bg-white border border-black/10">
+                <strong>No User Accounts:</strong> Anyone can explore palettes and submit photos anonymously.
+              </div>
+              <div class="p-2.5 rounded-xl bg-white border border-black/10">
+                <strong>Zero Cookies:</strong> No database or session cookies. Cloudflare D1 and Workers operate via edge bindings without tracking.
+              </div>
+            </div>
+            <p class="pt-1 flex flex-wrap items-center gap-x-2">
+              <span>Privacy &amp; terms:</span>
+              <button type="button" data-action="toggle-legal" data-doc="privacy" aria-controls="legal-doc-privacy" aria-expanded="false" class="inline-flex min-h-11 items-center text-black font-medium underline underline-offset-2 cursor-pointer">Privacy Policy</button>
+              <span aria-hidden="true">·</span>
+              <button type="button" data-action="toggle-legal" data-doc="terms" aria-controls="legal-doc-terms" aria-expanded="false" class="inline-flex min-h-11 items-center text-black font-medium underline underline-offset-2 cursor-pointer">Terms of Service</button>
+            </p>
+
+            <!-- Inline Privacy Policy Drawer -->
+            <div id="legal-doc-privacy" hidden class="p-3.5 rounded-2xl bg-neutral-50 border border-black/10 space-y-2 text-[11px] text-neutral-700">
+              <div class="font-semibold text-black text-xs">Sky Palette Privacy Policy (Summary)</div>
+              <p>1. <strong>Information We Do Not Collect:</strong> We do not ask for or collect names, email addresses, passwords, phone numbers, or payment data. We do not use cookies, tracking keys, or third-party advertising pixels.</p>
+              <p>2. <strong>Chosen city:</strong> Your chosen city is remembered in this browser (one key, no identifiers, no tracking).</p>
+              <p>3. <strong>Crowdsourced Sky Photos:</strong> When you submit a sky image, the Worker strips camera metadata and GPS coordinates before storing it. Submissions stay anonymous, are queued as pending, and are only published after review. Contributions are dedicated to the public domain under CC0.</p>
+              <p>4. <strong>Telemetry & Infrastructure:</strong> Usage is monitored exclusively through privacy-preserving aggregate telemetry via Cloudflare Web Analytics without tracking individual users or collecting IP addresses.</p>
+            </div>
+
+            <!-- Inline Terms of Service Drawer -->
+            <div id="legal-doc-terms" hidden class="p-3.5 rounded-2xl bg-neutral-50 border border-black/10 space-y-2 text-[11px] text-neutral-700">
+              <div class="font-semibold text-black text-xs">Sky Palette Terms of Service (Summary)</div>
+              <p>1. <strong>Open Source & Free Use:</strong> Sky Palette is free and open-source software provided under the MIT License. You are free to use generated color palettes for personal, commercial, and artistic purposes.</p>
+              <p>2. <strong>Contribution Terms:</strong> By sharing a photo through Sky Palette, you confirm you are the copyright holder and agree to irrevocably dedicate your contribution to the public domain under CC0 1.0 Universal.</p>
+              <p>3. <strong>Disclaimer:</strong> Solar physics calculations and color values are provided "as is" without warranties of any kind.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Licenses & Attribution -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Licenses & Credits</h4>
+          <div class="space-y-2 text-[11px] text-neutral-600">
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Sky Palette Web Codebase</div>
+                <div class="text-neutral-500">Open-source software release.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">MIT</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Community Contributed Sky Photos</div>
+                <div class="text-neutral-500">All published community sky photography is dedicated to the public domain.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC0 1.0</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Open-Meteo Meteorological Data</div>
+                <div class="text-neutral-500">Weather data provided under Creative Commons Attribution 4.0.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC BY 4.0</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Design & Unslop Methodology</div>
+                <div class="text-neutral-500">Unslopped with methodology by Damir Sokolovsky (@heydamir).</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC BY 4.0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Release Notes Section -->
+        <div id="release-notes-section" class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Release Notes</h4>
+          <div class="space-y-3 font-mono text-[11px]">
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1.5 font-sans">
+              <div class="flex items-center justify-between font-mono text-xs">
+                <span class="font-bold text-black">v1.0.0 · Initial launch</span>
+                <span class="text-neutral-500 text-[10px]">November 2026</span>
+              </div>
+              <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+                <li>Worker API for palettes, 15/30-day history, geocoding, gallery, config and dynamic OG cards.</li>
+                <li>Shared solar, C1 palette, WCAG colour and timezone engines used by both Worker and browser.</li>
+                <li>Live Open-Meteo cloud layers and per-day sunset palettes cached at the edge.</li>
+                <li>Turnstile-protected photo submissions with server-side metadata stripping, private R2 storage and pending review.</li>
+                <li>Typed modular client with real data, local scrub computation and Canvas share cards.</li>
+                <li>Mobile <code>dvh</code> layout with safe-area insets, focus-trapped dialogs and WCAG 2.2 AA checks.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3.5 bg-neutral-50 border-t border-black/5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        <div class="text-[11px] text-neutral-500 font-mono flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>Global skies · MIT & CC0</span>
+          <a href="https://github.com/antoniocranga/sky-palette/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer" class="min-h-11 inline-flex items-center text-neutral-600 hover:text-black font-medium transition-colors underline underline-offset-2">Report a bug</a>
+        </div>
+        <button type="button" data-action="close-info" class="min-h-11 px-4 py-1.5 rounded-full bg-black hover:bg-neutral-800 text-white font-medium text-xs transition-colors cursor-pointer">
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- JAVASCRIPT APPLICATION LOGIC                             -->
+  <!-- ======================================================== -->
+
+</body>
+</html>

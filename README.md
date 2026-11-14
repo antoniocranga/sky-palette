@@ -1,108 +1,80 @@
 # Sky Palette
 
-> **Physical sky color engine and solar architecture calculating real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.**
+> Real-time 5-swatch atmospheric palettes computed from solar geometry and cloud dynamics.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg?style=flat-square)](LICENSE)
-[![Zero Cookies](https://img.shields.io/badge/Telemetry-Zero%20Cookies-emerald.svg?style=flat-square)](#privacy--telemetry)
-[![Cloudflare Native](https://img.shields.io/badge/Stack-Cloudflare%20Native-F38020.svg?style=flat-square)](#architecture--cloud-infrastructure)
-[![Domain](https://img.shields.io/badge/Domain-skypalette.app-black.svg?style=flat-square)](https://skypalette.app)
+[![CI](https://github.com/antoniocranga/sky-palette/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/antoniocranga/sky-palette/actions/workflows/ci-cd.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020)](https://developers.cloudflare.com/workers/)
 
----
+Sky Palette turns the sky above any city into five colours — **Zenith, Mid-Sky, Horizon, Sun Glow, Cloud Tint** — and lets you scrub through the day to see how they evolve. Palettes are computed from the sun's actual elevation, three cloud layers, and visibility, then stored so the gallery can show how a city's golden hour changed over the last month.
 
-## 🌌 Overview
+Live: [skypalette.app](https://skypalette.app)
 
-**Sky Palette** turns the atmosphere above any city into a shareable 5-swatch color palette (*Zenith, Mid-Sky, Horizon, Sun Glow, Cloud Tint*). It merges **physics-based atmospheric scattering simulation** (Preetham / Hosek-Wilkie models) with **real-time Open-Meteo cloud-cover dynamics** and **crowdsourced community sky photographs**.
-
-- **Clean, Unobstructed Horizon:** A pure physical sky gradient without distracting top logos or banners.
-- **Bucharest HQ Time Anchor:** Anchored at Bucharest (`44.4268° N, 26.1025° E`), displaying real-time local sun elevation and azimuth.
-- **Refined Autocomplete Search:** Borderless black floating search pill with city-first title hierarchy, supporting global cities and postal/ZIP codes with dynamic twin-pill geometry matching when a single result is found.
-- **Jog-Dial Step Scrubber:** Discrete 15-minute time stepping with circled pill geometry (`border-radius: 9999px`), continuous $C^1$ Hermite contrast adaptation (black on day, white on night), emerald live time dot, and iOS momentum physics with elastic rubber-band boundaries.
-- **15-Day Sunset Mosaic:** Fullscreen zero-scroll gallery displaying the historical golden-hour palette transitions across the past 15 days.
-- **Atmospheric Telemetry Cards:** Strava-style visual cards displaying solar elevation, azimuth, cloud cover, and hex swatches with one-click PNG export.
-- **Privacy-First Contribution:** Client-side EXIF extraction, automated computer vision sky heuristic check, and anonymous handles with zero accounts or tracking.
-
----
-
-## ⚡ Architecture & Cloud Infrastructure
-
-Sky Palette runs on a **100% Cloudflare Native Stack**, operating completely within Cloudflare's free tier ($0/month) with zero inactivity pausing:
+## How it works
 
 ```
-┌────────────────────────────────────────────────────────┐
-│           Client Browser (HTML5 / Canvas / CSS)        │
-└──────────────┬───────────────────────────┬─────────────┘
-               │                           │
-   Static Assets & Pages          API / Submissions
-               │                           │
-┌──────────────▼───────────────────────────▼─────────────┐
-│                 Cloudflare Workers & Pages             │
-│            Custom Domain: skypalette.app               │
-├──────────────────────────┬─────────────────────────────┤
-│  Cloudflare D1 (SQLite)  │  Cloudflare R2 Storage      │
-│  UUID: 5e1c6b54-4020...  │  Bucket: sky-photos         │
-│  Region: EEUR (Bucharest)│  Zero Egress Bandwidth      │
-├──────────────────────────┼─────────────────────────────┤
-│  Cloudflare Turnstile    │  Cloudflare Web Analytics   │
-│  Bot Verification        │  0 Cookies · Aggregate RUM  │
-└──────────────────────────┴─────────────────────────────┘
+Browser                              Cloudflare Worker
+─────────────────────────────        ────────────────────────────────
+src/shared/solar.ts    ─────┐        GET /api/palette   → Open-Meteo + D1 cache
+src/shared/palette.ts  ─────┴───►    GET /api/history   → per-day sunset palettes
+  same physics, 60 fps                GET /api/cities    → geocoding + D1 cache
+                                      POST /api/submit   → Turnstile, strip EXIF, R2, D1
+                                      GET /api/photos/*  → R2 stream
+                                      GET /api/og        → PNG social card
+                                      GET /api/health    → D1 liveness
 ```
 
-| Component | Technology | Free Tier Allocation |
-|---|---|---|
-| **Edge Compute** | Cloudflare Workers / Pages | 100,000 requests/day |
-| **Database** | Cloudflare D1 (Serverless SQLite) | 5,000,000 reads/day · 100,000 writes/day · 5 GB |
-| **Object Storage** | Cloudflare R2 | 10 GB storage · 10M reads/month · **$0 egress fees** |
-| **Bot Protection** | Cloudflare Turnstile | Unlimited free bot protection |
-| **Telemetry** | Cloudflare Web Analytics | 100% cookie-free aggregate Real User Monitoring |
-| **Weather Feed** | Open-Meteo API | Free non-commercial API (CC BY 4.0) |
+The palette engine is **one implementation** (`src/shared/`) imported by both the Worker and the browser, so the value you see while dragging is exactly the value the API returns. The client recomputes locally on every frame and refetches only when the drag settles, to pick up real weather.
 
----
+## Stack
 
-## 🗄️ Database Schema
+| Layer | Choice |
+|---|---|
+| Edge compute | Cloudflare Workers (`src/worker/`) |
+| Static assets | Workers Static Assets, built by Vite |
+| Database | D1 (`migrations/`) |
+| Photos | R2, private bucket streamed through the Worker |
+| Bot protection | Turnstile on uploads |
+| Build | Vite + `@cloudflare/vite-plugin`, Tailwind v4, self-hosted fonts |
+| Tests | Vitest (unit), `@cloudflare/vitest-plugin` (real D1/R2), Playwright + axe |
+| Monitoring | Workers Logs + Traces, structured JSON logs |
 
-The database is deployed live on Cloudflare D1 in region **EEUR** (`sky-palette-db`, UUID `5e1c6b54-4020-4e9b-a5d5-0cea27498741`):
+No runtime third-party requests: fonts, CSS and JS are all served from the same origin.
 
-- `cities`: ~44,000 global cities with coordinates, timezones, and URL slugs.
-- `submissions`: Community photos with EXIF capture time, coordinates, 5 extracted swatches, R2 keys, and moderation status.
-- `daily_palettes`: Pre-computed and cached historical golden-hour palettes.
-
-See [`schema.sql`](schema.sql) for full SQLite definitions and covering indexes.
-
----
-
-## 🚀 Quick Start (Prototype Preview)
-
-To explore the interactive prototype with full responsive previews:
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/antoniocranga/sky-palette.git
-cd sky-palette
-
-# Start local preview server (Python 3)
-python3 -m http.server 4321
-
-# Open in browser
-open http://localhost:4321/preview.html
-# Or open responsive device preview harness (iPhone 15 Pro, Pixel 8, iPad Pro)
-open http://localhost:4321/device-preview.html
+npm ci
+cp .dev.vars.example .dev.vars    # fill TURNSTILE_SECRET_KEY and IP_SALT
+npm run db:migrate:local
+npm run dev                       # http://localhost:5173
 ```
 
----
+| Script | What it does |
+|---|---|
+| `npm run dev` | Vite dev server with real Worker bindings (local D1/R2) |
+| `npm run build` | Builds the client and Worker into `dist/` |
+| `npm run preview` | Serves the production build locally |
+| `npm run typecheck` | Strict TypeScript for worker, client and tooling |
+| `npm test` | Unit + Worker integration tests |
+| `npm run test:e2e` | Playwright at iPhone 15 Pro, iPad and desktop sizes |
+| `npm run db:migrate:local` | Apply D1 migrations locally |
+| `npm run deploy` | Build and deploy to Cloudflare |
 
-## 🔒 Privacy & Telemetry
+## Deploying
 
-Sky Palette is committed to strict data minimalism:
-- **Zero Cookies:** No cookies or client-side session trackers.
-- **Zero Fingerprinting:** No canvas hashes, audio signatures, or persistent device identifiers.
-- **Zero Accounts:** Fully anonymous photo submissions and palette exploration.
-- **Privacy-First Analytics:** Cloudflare Web Analytics processes aggregate performance metrics without recording IP addresses. 100% GDPR and ePrivacy compliant without cookie banners.
+Production deploys run from GitHub Actions on every push to `main`: validate → apply D1 migrations → `wrangler deploy` → health check. Setup, secrets, Turnstile, R2 and optional Workers Builds are documented in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
----
+The launch checklist with evidence and open blockers is [`docs/PRE-LAUNCH.md`](docs/PRE-LAUNCH.md). Observability charts: [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md). Release notes: [`CHANGELOG.md`](CHANGELOG.md).
 
-## 📜 Licenses & Attribution
+## Privacy
 
-- **Codebase:** [MIT License](LICENSE) © 2026 Antonio Cranga.
-- **Community Photographs:** Dedicated to the Public Domain under [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/).
-- **Atmospheric Weather Data:** Courtesy of [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-- **Design Philosophy:** Unslopped methodology based on Damir Sokolovsky ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+No accounts, no cookies, no fingerprinting, no third-party analytics by default. The only browser storage is one key holding your chosen city, so the app opens where you left it; no coordinates, identifiers or timestamps. Uploads are anonymous; the only identifier stored is a salted SHA-256 hash of the client IP, used solely to enforce the upload rate limit. Photo metadata (EXIF, GPS, device) is stripped server-side before the file reaches R2.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Security reports: [`SECURITY.md`](SECURITY.md).
+
+## Licence
+
+Code MIT © 2026 Antonio Cranga. Community photos CC0. Weather data [Open-Meteo](https://open-meteo.com/) (CC BY 4.0). Design methodology after Damir Sokolovsky (CC BY 4.0).

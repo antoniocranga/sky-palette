@@ -1,0 +1,46 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: Production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: API health
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            body=$(curl -fsS --max-time 15 https://skypalette.app/api/health || true)
+            if echo "$body" | grep -q '"ok":true'; then
+              echo "healthy: $body"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "health check failed after 3 attempts"
+          exit 1
+
+      - name: Homepage
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://skypalette.app/)
+          echo "homepage $code"
+          test "$code" = "200"
+
+      - name: Palette endpoint
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 'https://skypalette.app/api/palette?lat=44.4268&lon=26.1025')
+          echo "palette $code"
+          test "$code" = "200"
