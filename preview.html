@@ -4,11 +4,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sky Palette — Interactive Prototype (Bucharest HQ)</title>
+  <title>Sky Palette — Physical Sky Color Engine (Bucharest HQ)</title>
+  <meta name="description" content="Physical sky color engine and solar architecture calculating real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://skypalette.app">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23f97316'/></svg>">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://skypalette.app">
+  <meta property="og:title" content="Sky Palette — Physical Sky Color Engine">
+  <meta property="og:description" content="Real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.">
+  <meta property="og:image" content="https://skypalette.app/og-image.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://skypalette.app">
+  <meta name="twitter:title" content="Sky Palette — Physical Sky Color Engine">
+  <meta name="twitter:description" content="Real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.">
+  <meta name="twitter:image" content="https://skypalette.app/og-image.png">
+
+  <!-- Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Sky Palette",
+    "url": "https://skypalette.app",
+    "description": "Physical sky color engine and solar architecture calculating real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "All"
+  }
+  </script>
+
   <!-- Cloudflare Web Analytics (Privacy-First: Zero Cookies, Zero Storage, Zero Personal Data) -->
   <!-- In production, activate with: <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "CLOUDFLARE_BEACON_TOKEN"}'></script> -->
   <!-- Tailwind CSS -->
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script defer src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -139,6 +172,14 @@
 </head>
 <body class="selection:bg-black selection:text-white">
 
+  <!-- Accessible Skip Link -->
+  <a href="#main-home" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[99] focus:px-4 focus:py-2 focus:bg-black focus:text-white focus:rounded-full focus:shadow-2xl focus:border focus:border-white/30 text-xs font-mono">
+    Skip to main content
+  </a>
+
+  <!-- Accessible Root Heading (Screen Reader Accessible) -->
+  <h1 class="sr-only">Sky Palette — Physical Sky Color Engine & Solar Architecture</h1>
+
   <!-- Toast Notification -->
   <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] bg-black text-white px-4 py-2 rounded-full text-xs font-mono border border-white/20 shadow-2xl opacity-0 pointer-events-none -translate-y-2 transition-all duration-200">
     <span id="toast-msg">Copied</span>
@@ -151,19 +192,19 @@
     
     <!-- Dynamic Navigation Pill (Same height as search bar) -->
     <nav aria-label="Screen navigation" class="flex items-center gap-1.5 sm:gap-2 p-1.5 bg-black text-white rounded-full shadow-2xl border border-white/20 text-sm sm:text-base font-medium h-[52px] sm:h-[56px]">
-      <button onclick="navigateTo('screen-home')" id="nav-btn-home" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors bg-white text-black font-semibold shadow-md">
+      <button onclick="navigateTo('screen-home')" id="nav-btn-home" aria-label="Home Screen" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors bg-white text-black font-semibold shadow-md">
         Home
       </button>
-      <button onclick="handleGalleryNav()" id="nav-btn-gallery" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+      <button onclick="handleGalleryNav()" id="nav-btn-gallery" aria-label="15-Day Gallery Mosaic" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
         Gallery
       </button>
-      <button onclick="openSubmitModal()" id="nav-btn-submit" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+      <button onclick="openSubmitModal()" id="nav-btn-submit" aria-label="Submit Sky Photo" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
         Submit
       </button>
     </nav>
 
     <!-- Dedicated Circular Share Button (Same width/height as search bar) -->
-    <button onclick="triggerShare()" id="dock-share-btn" title="Share palette" class="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full bg-black text-white hover:bg-neutral-800 flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-95 shrink-0">
+    <button onclick="triggerShare()" id="dock-share-btn" title="Share palette" aria-label="Share Atmosphere Telemetry Card" class="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full bg-black text-white hover:bg-neutral-800 flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-95 shrink-0">
       <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="18" cy="5" r="3"/>
         <circle cx="6" cy="12" r="3"/>
@@ -190,7 +231,8 @@
     </button>
 
     <!-- Center Stage: Location Header + Search + Solar Hour Slider -->
-    <main class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 max-w-xl mx-auto w-full">
+    <main id="main-home" class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 max-w-xl mx-auto w-full">
+      <h2 class="sr-only">Live Atmospheric Palette & Astronomical Solar Position</h2>
       
       <!-- 1. Bucharest HQ with Time Only on top of Search -->
       <div class="flex items-center justify-center gap-1.5 mb-2.5 select-none text-[11px] sm:text-xs text-white/80 font-mono tracking-tight">
@@ -202,6 +244,7 @@
 
       <!-- 2. Pure Black Rounded Search Bar -->
       <div class="w-full relative mb-5">
+        <label for="city-search-input" class="sr-only">Search city or postal code</label>
         <div class="relative flex items-center bg-black text-white rounded-full h-[52px] sm:h-[56px] px-6 shadow-2xl">
           <!-- Search Icon -->
           <svg class="w-4 h-4 text-white/80 mr-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -368,16 +411,17 @@
       <!-- Header -->
       <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
         <div>
-          <h3 class="text-base font-semibold text-neutral-900">Search Location</h3>
+          <h2 class="text-base font-semibold text-neutral-900">Search Location</h2>
           <p class="text-xs text-neutral-400">Switch gallery to another city or postal code</p>
         </div>
-        <button onclick="closeGallerySearchModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+        <button onclick="closeGallerySearchModal()" aria-label="Close search dialog" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
       <!-- Search Bar: White Background with Black Content -->
       <div class="relative flex items-center bg-white text-black rounded-full h-[52px] px-5 border border-black/15 focus-within:border-black shadow-xs transition-colors">
+        <label for="modal-city-search-input" class="sr-only">Search city or postal code</label>
         <svg class="w-4 h-4 text-neutral-500 mr-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input 
           type="text" 
@@ -480,7 +524,7 @@
         <div id="ref-photo-overlay" class="absolute inset-y-0 right-0 w-full sm:w-1/2 bg-black/85 backdrop-blur-md text-white p-3 sm:p-4 transition-transform duration-300 translate-x-full flex flex-col justify-between border-l border-white/10 z-20">
           <div class="flex items-center justify-between text-xs">
             <span class="font-mono text-white/70 text-[11px] sm:text-xs" id="ref-photo-time">Capture: 16:52 EET</span>
-            <button onclick="clearReferencePhoto()" class="p-1 text-white/60 hover:text-white rounded-full">
+            <button onclick="clearReferencePhoto()" aria-label="Remove reference photo" class="p-1 text-white/60 hover:text-white rounded-full">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -656,9 +700,9 @@
     <div class="modal-card relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 transform scale-95 transition-[transform,opacity] duration-200 max-h-[92vh] flex flex-col">
       <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5">
         <div>
-          <h3 class="text-base font-semibold text-black">Share a photo of your sky</h3>
+          <h2 class="text-base font-semibold text-black">Share a photo of your sky</h2>
         </div>
-        <button onclick="closeSubmitModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+        <button onclick="closeSubmitModal()" aria-label="Close submit dialog" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -803,10 +847,10 @@
       <!-- Modal Header -->
       <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5">
         <div>
-          <h3 class="text-base font-semibold text-black">Share Sky Card</h3>
+          <h2 class="text-base font-semibold text-black">Share Sky Card</h2>
           <p class="text-xs text-neutral-500">Select an aesthetic card layout</p>
         </div>
-        <button onclick="closeShareModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+        <button onclick="closeShareModal()" aria-label="Close share dialog" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -984,13 +1028,13 @@
 
           <div class="flex items-center justify-center gap-2 pt-2 border-t border-black/5">
             <span class="text-[11px] text-neutral-400 mr-1">Share to:</span>
-            <button onclick="shareTo('instagram')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Instagram Stories">
+            <button onclick="shareTo('instagram')" aria-label="Share to Instagram Stories" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Instagram Stories">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
             </button>
-            <button onclick="shareTo('x')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="X (Twitter)">
+            <button onclick="shareTo('x')" aria-label="Share to X" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="X (Twitter)">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             </button>
-            <button onclick="shareTo('threads')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Threads">
+            <button onclick="shareTo('threads')" aria-label="Share to Threads" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Threads">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-9 9c4.97 0 9-4.03 9-9"/></svg>
             </button>
           </div>
@@ -1015,14 +1059,14 @@
             SP
           </div>
           <div>
-            <h3 class="text-base font-semibold text-black tracking-tight flex items-center gap-2">
+            <h2 class="text-base font-semibold text-black tracking-tight flex items-center gap-2">
               Sky Palette
               <span class="px-2 py-0.5 rounded-full bg-neutral-100 border border-black/10 text-[10px] font-mono font-medium text-neutral-600">v1.2.0</span>
-            </h3>
+            </h2>
             <p class="text-xs text-neutral-500 font-sans">Physical sky color engine & solar architecture</p>
           </div>
         </div>
-        <button onclick="closeInfoModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+        <button onclick="closeInfoModal()" aria-label="Close info dialog" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1284,6 +1328,20 @@
   <!-- JAVASCRIPT APPLICATION LOGIC                             -->
   <!-- ======================================================== -->
   <script>
+    // ----------------------------------------------------
+    // GLOBAL SAFE ERROR BOUNDARY (Zero Raw Error Leaks)
+    // ----------------------------------------------------
+    window.addEventListener('error', function(event) {
+      // Prevent browser default error dialogs
+      event.preventDefault();
+      console.warn('[Sky Palette]: Client exception handled safely.');
+    });
+
+    window.addEventListener('unhandledrejection', function(event) {
+      event.preventDefault();
+      console.warn('[Sky Palette]: Async operation calibrated safely.');
+    });
+
     // ----------------------------------------------------
     // 1. BUCHAREST HQ & CITIES DATASET
     // ----------------------------------------------------

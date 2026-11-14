@@ -1,0 +1,63 @@
+name: Bug Report
+description: Report a bug, rendering defect, or unexpected behavior in Sky Palette
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue with Sky Palette! Please provide details to help us reproduce and resolve the problem.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Device & Operating System
+      options:
+        - iOS / Safari (iPhone)
+        - iPadOS / Safari (iPad)
+        - Android / Chrome (Mobile)
+        - macOS / Safari
+        - macOS / Chrome
+        - macOS / Firefox
+        - Windows / Chrome
+        - Windows / Edge
+        - Linux / Chrome or Firefox
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location / Time tested
+      description: e.g. Bucharest HQ (15:17), Tokyo (08:30), etc.
+      placeholder: Bucharest, Nov 14 at 16:51
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Go to '...'
+        2. Drag slider to '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or Console Output
+      description: Drag & drop images or paste any console warnings (never include private tokens).

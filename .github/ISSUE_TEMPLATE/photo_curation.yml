@@ -1,0 +1,35 @@
+name: Community Photo Curation / Removal Request
+description: Request review or removal of a crowdsourced sky photograph
+title: "[Curation]: "
+labels: ["curation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Community sky photos are shared under CC0 1.0 Universal. If a photo depicts inappropriate content, violates privacy, or contains incorrect location/timestamp metadata, please report it here.
+  - type: input
+    id: photo_id
+    attributes:
+      label: Submission ID / URL
+      description: The unique identifier or link to the photo.
+    validations:
+      required: true
+  - type: dropdown
+    id: reason
+    attributes:
+      label: Reason for Review
+      options:
+        - Contains identifiable persons / PII
+        - Inappropriate or non-sky content
+        - Inaccurate location / coordinates
+        - Copyright / licensing dispute
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional Details
+      description: Provide context for the curation team.
+    validations:
+      required: true

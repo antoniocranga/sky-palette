@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Sky Palette Live Web App
+    url: https://skypalette.app
+    about: Experience real-time atmospheric palettes in your browser.
+  - name: Front-End Checklist MCP
+    url: https://frontendchecklist.io
+    about: Web development rules and launch validation standard.
