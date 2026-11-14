@@ -9,8 +9,8 @@ const LAT = 44.4268;
 const LON = 26.1025;
 const TZ = "Europe/Bucharest";
 
-function today(): string {
-  return isoDayInZone(new Date(), TZ);
+function today(timeZone = TZ): string {
+  return isoDayInZone(new Date(), timeZone);
 }
 
 async function history(query: string): Promise<HistoryResponse> {
@@ -72,8 +72,10 @@ describe("GET /api/history", () => {
     await history(`lat=41.3874&lon=2.1686&days=5&tz=Europe/Madrid`);
 
     expect(ranges).toHaveLength(1);
-    expect(ranges[0]?.start).toBe(addDays(today(), -4));
-    expect(ranges[0]?.end).toBe(addDays(today(), -3));
+    // The route works in the requested zone; using Bucharest here would flake
+    // whenever the two zones are on different calendar days.
+    expect(ranges[0]?.start).toBe(addDays(today("Europe/Madrid"), -4));
+    expect(ranges[0]?.end).toBe(addDays(today("Europe/Madrid"), -3));
   });
 
   it("degrades to clear-sky palettes when the upstream is unavailable", async () => {
