@@ -3,10 +3,23 @@ import { test, expect, gotoGallery, gotoHome, openFirstDay } from "./fixtures";
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
-async function expectNoSeriousViolations(page: import("@playwright/test").Page, label: string): Promise<void> {
-  await page.waitForTimeout(350);
+test.use({ reducedMotion: "reduce" });
+
+async function scan(page: import("@playwright/test").Page) {
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  const blocking = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+  return results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+}
+
+async function expectNoSeriousViolations(page: import("@playwright/test").Page, label: string): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(350);
+  let blocking = await scan(page);
+  if (blocking.length > 0) {
+    // WebKit can scan in the middle of a paint in CI. A second settled scan
+    // must agree before the suite fails.
+    await page.waitForTimeout(600);
+    blocking = await scan(page);
+  }
   const description = blocking
     .map((violation) => `${violation.id} (${violation.impact}): ${violation.help}\n${violation.nodes.map((node) => node.target.join(" ")).slice(0, 5).join("\n")}`)
     .join("\n\n");
@@ -21,6 +34,8 @@ test.describe("accessibility", () => {
 
   test("gallery has no serious or critical axe violations", async ({ page }) => {
     await gotoGallery(page);
+    await expect(page.locator("#gallery-skeleton")).toBeHidden();
+    await expect(page.locator("#day-cards-grid .day-tile").first()).toBeVisible();
     await expectNoSeriousViolations(page, "gallery");
   });
 

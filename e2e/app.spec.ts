@@ -97,6 +97,12 @@ async function readShareProbe(page: import("@playwright/test").Page): Promise<Sh
 }
 
 test.describe("Sky Palette app", () => {
+  // Every assertion is written against this fixed instant, so a CI run at
+  // midnight cannot change the live step, clock or date-derived URL.
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-14T14:15:00Z"));
+  });
+
   test("home renders real palette, solar and weather values", async ({ page }) => {
     await gotoHome(page);
 
@@ -712,7 +718,13 @@ test.describe("Sky Palette app", () => {
     await expect(input).toHaveValue("My observatory");
     const hint = page.locator("#photo-location-hint");
     await expect(hint).toBeVisible({ timeout: 8000 });
-    await page.locator('[data-action="use-photo-location"]').click();
+    const usePhoto = page.locator('[data-action="use-photo-location"]');
+    await expect(page.locator("#submit-location-dropdown")).toBeHidden();
+    const firstBox = await usePhoto.boundingBox();
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const secondBox = await usePhoto.boundingBox();
+    expect(secondBox).toEqual(firstBox);
+    await usePhoto.click();
     await expect(input).toHaveValue("Tokyo, Japan");
     await expect(page.locator("#from-photo-badge")).toBeVisible();
     await expect(hint).toBeHidden();

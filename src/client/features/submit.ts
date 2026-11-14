@@ -554,6 +554,9 @@ export class SubmitFeature {
     if (!current || current === appLabel) {
       this.applyPhotoLocation(location);
     } else {
+      // The pending city lookup can still be open over the hint; close it so
+      // its result row cannot intercept the "Use photo location" button.
+      this.locationSearch.close();
       setHidden(this.photoHint, false);
       setHidden(this.fromPhotoBadge, true);
     }
