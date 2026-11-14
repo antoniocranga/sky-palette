@@ -22,7 +22,7 @@ export class GalleryFeature {
   private readonly popover = qs("#interval-popover");
   private readonly main = qs<HTMLElement>("#gallery-main");
   private controller: AbortController | null = null;
-  private days: Interval = 15;
+  private days: Interval;
   private loadedFor = "";
 
   constructor(initialDays: Interval = 15) {

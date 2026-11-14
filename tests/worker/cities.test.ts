@@ -90,7 +90,7 @@ describe("GET /api/cities", () => {
     await insertCity("denver-united-states", "Denver", 39.7, -105.0);
 
     mockUpstream((url) =>
-      url.hostname.includes("geocoding-api.open-meteo.com") ? new Response("down", { status: 502 }) : null,
+      url.hostname === "geocoding-api.open-meteo.com" ? new Response("down", { status: 502 }) : null,
     );
 
     const response = await SELF.fetch(`${BASE}/api/cities?q=Spring`);
@@ -103,7 +103,7 @@ describe("GET /api/cities", () => {
 
   it("returns an empty list when nothing matches and the geocoder is down", async () => {
     mockUpstream((url) =>
-      url.hostname.includes("geocoding-api.open-meteo.com") ? new Response("down", { status: 500 }) : null,
+      url.hostname === "geocoding-api.open-meteo.com" ? new Response("down", { status: 500 }) : null,
     );
 
     const response = await SELF.fetch(`${BASE}/api/cities?q=Atlantis`);

@@ -91,7 +91,7 @@ export function openMeteoHandler(): UpstreamHandler {
 
 export function geocoderHandler(results: unknown[]): UpstreamHandler {
   return (url) => {
-    if (!url.hostname.includes("geocoding-api.open-meteo.com")) return null;
+    if (url.hostname !== "geocoding-api.open-meteo.com") return null;
     return jsonBody({ results });
   };
 }

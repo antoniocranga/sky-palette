@@ -16,7 +16,7 @@ import {
 import { CARD_SIZE, STORY_LAYOUT, STORY_SIZE, sharePngFilename, storyContent } from "../lib/share-card";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
-import { clockInZone, fractionalHourInZone, isoDayInZone } from "../../shared/time";
+import { clockInZone, isoDayInZone } from "../../shared/time";
 import type { Palette } from "../../shared/types";
 import { cityLabelWithCountry, shareUrlFor, store, type ShareSnapshot } from "../state";
 import { ModalController } from "../lib/dom";

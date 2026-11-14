@@ -369,7 +369,7 @@ test.describe("responsive layout", () => {
         animating: document.querySelectorAll(".is-animating").length,
       };
     });
-    expect(timing.durations.every((value) => value === "0s" || value === "0s")).toBe(true);
+    expect(timing.durations.every((value) => value === "0s")).toBe(true);
     expect(timing.dotDuration.every((value) => value === "0s")).toBe(true);
     expect(timing.animating).toBe(0);
     expect(timing.skeletonAnimation).toBe("none");
