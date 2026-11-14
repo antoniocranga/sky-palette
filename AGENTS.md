@@ -101,3 +101,43 @@ The client browser is strictly responsible for zero-latency, fluid user interact
 - **Zero Fingerprinting:** Never generate device hashes, canvas fingerprints, or audio signatures.
 - **No User Accounts:** Completely anonymous exploration and photo submission with auto-generated animal/nature handles (`sky-bucharest-48b`).
 - **GDPR & ePrivacy Native Compliance:** By collecting zero PII and using cookie-free Cloudflare Web Analytics, the application is compliant by design without requiring cookie popups.
+
+---
+
+## 6. Pre-Launch & Release Verification Checklist
+
+> Referenced from **The Front-End Checklist** (`https://mcp.frontendchecklist.io/` & `https://github.com/thedaviddias/front-end-checklist`).  
+> **Mandatory check on every code release and deployment.**
+
+### 6.1 Head & Metadata Architecture
+- [ ] `<!DOCTYPE html>` declared at root of document.
+- [ ] `<html lang="en">` declared with valid language tag.
+- [ ] `<meta charset="UTF-8">` placed in the first 1024 bytes of `<head>`.
+- [ ] Responsive viewport meta tag `<meta name="viewport" content="width=device-width, initial-scale=1.0">`.
+- [ ] Unique, descriptive `<title>` (under 65 characters) and `<meta name="description">` (120–160 characters).
+- [ ] Self-referencing canonical URL `<link rel="canonical" href="https://skypalette.app">`.
+- [ ] Open Graph protocol (`og:title`, `og:description`, `og:image`, `og:url`, `og:type`) and Twitter Cards (`summary_large_image`).
+- [ ] Schema.org structured data (`application/ld+json`) for `WebApplication`.
+- [ ] Favicon SVG and Apple Touch Icon declared without broken links.
+
+### 6.2 HTML & Accessibility (WCAG 2.2 AA)
+- [ ] Semantic HTML5 elements (`<header>`, `<main>`, `<footer>`, `<dialog>`, `<nav>`) properly nested.
+- [ ] All interactive buttons and inputs have accessible labels (`aria-label` or linked `<label for="">`).
+- [ ] Touch targets adhere to minimum 44×44px interactive bounding boxes.
+- [ ] Contrast engine maintains WCAG 2.2 AA compliance across all solar elevation angles using $C^1$ continuous Hermite interpolation.
+- [ ] Keyboard navigation supported with visible focus rings and Escape key dialog dismissals.
+
+### 6.3 Performance & Web Vitals
+- [ ] Web fonts optimized with `preconnect` and `font-display: swap`.
+- [ ] Modern CSS architecture (`calc()`, dynamic gradients, hardware-accelerated transforms).
+- [ ] Sub-second time-to-first-byte (TTFB) and instant interactive feedback on scrubber drag.
+- [ ] Zero layout shifts (CLS = 0) with predefined dimensions.
+
+### 6.4 Security, Edge & Privacy
+- [ ] Strict adherence to Section 1 Zero Secrets Policy (`git diff --cached` verified).
+- [ ] Local environment files (`.env`, `.dev.vars`, `*.local`) excluded in `.gitignore`.
+- [ ] Server-side execution boundaries strictly maintained (Workers, D1, R2).
+- [ ] Salted SHA-256 IP hashing for abuse rate limiting; zero raw IP addresses logged or stored.
+- [ ] Safe error responses (no stack traces, no internal database errors exposed to client).
+- [ ] OpenTelemetry traces and structured JSON logging active for production observability.
+- [ ] Automated tests pass 100% locally and in GitHub Actions CI/CD (`npm test`).
