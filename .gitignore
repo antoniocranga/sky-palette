@@ -1,0 +1,25 @@
+# Antigravity tooling
+.agents/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Cloudflare & Wrangler
+.wrangler/
+.dev.vars
+
+# Environment files
+.env
+.env.local
+.env.production
+.env*.local
+
+# Build outputs
+.next/
+dist/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db

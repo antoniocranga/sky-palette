@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sky-palette",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "skypalette.app/*",
+      "zone_name": "skypalette.app",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sky-palette-db",
+      "database_id": "5e1c6b54-4020-4e9b-a5d5-0cea27498741"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "sky-photos"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

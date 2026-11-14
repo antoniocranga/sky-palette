@@ -1,0 +1,3629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Palette — Multi-Device Studio (Bucharest HQ)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans);
+      background-color: #0b0d12;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Device Chassis Scaling Engine */
+    .device-scaler-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: width 0.25s ease, height 0.25s ease;
+    }
+
+    .device-chassis {
+      position: relative;
+      background: #000000;
+      overflow: hidden;
+      transform-origin: top center;
+      transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.4, 1), box-shadow 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    /* Specific Device Bezels */
+    .chassis-iphone {
+      border-radius: 50px;
+      box-shadow: 0 0 0 10px #1e1e24, 0 0 0 12px #36373e, 0 30px 80px rgba(0,0,0,0.85);
+    }
+    .chassis-samsung {
+      border-radius: 36px;
+      box-shadow: 0 0 0 8px #1a1a20, 0 0 0 10px #42434d, 0 30px 80px rgba(0,0,0,0.85);
+    }
+    .chassis-tablet {
+      border-radius: 32px;
+      box-shadow: 0 0 0 14px #1c1d22, 0 0 0 16px #383a42, 0 35px 90px rgba(0,0,0,0.9);
+    }
+    .chassis-desktop {
+      border-radius: 12px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 35px 90px rgba(0,0,0,0.9);
+      background: #18191f;
+    }
+
+    /* Hardware Cutouts */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 124px;
+      height: 35px;
+      background: #000000;
+      border-radius: 20px;
+      z-index: 50;
+      pointer-events: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    .punch-hole {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 13px;
+      height: 13px;
+      background: #000000;
+      border-radius: 50%;
+      z-index: 50;
+      pointer-events: none;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    /* Desktop Window Chrome - STRICTLY HIDDEN ON MOBILE */
+    .desktop-chrome {
+      height: 38px;
+      background: #18191f;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: none !important;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      user-select: none;
+    }
+
+    .device-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #090b10;
+    }
+
+    /* Dot Blueprint Grid Background */
+    .bg-grid {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #262933; border-radius: 9999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body class="bg-grid flex flex-col min-h-screen text-slate-100">
+
+  <!-- TOP TOOLBAR -->
+  <header class="sticky top-0 z-50 bg-[#101218]/95 backdrop-blur-md border-b border-white/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
+    
+    <div class="flex items-center gap-2.5 shrink-0">
+      <div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
+        <div class="w-2.5 h-2.5 rounded-full bg-white"></div>
+      </div>
+      <div>
+        <div class="font-semibold text-white tracking-wide flex items-center gap-1.5">
+          <span>Sky Palette</span>
+          <span class="text-[10px] text-emerald-400 font-mono font-normal">● Live Bucharest HQ</span>
+        </div>
+        <div class="text-[10px] text-white/50 font-mono" id="dimension-badge">iPhone 16 Pro · 393 × 852 pt</div>
+      </div>
+    </div>
+
+    <!-- Device Selector Navigation Tabs -->
+    <nav class="flex items-center gap-1 p-1 bg-black/80 rounded-full border border-white/10 shrink-0">
+      <button onclick="switchDevice('iphone')" id="tab-iphone" class="px-3 py-1 rounded-full bg-white text-black font-semibold transition-colors">
+        iPhone 16 Pro
+      </button>
+      <button onclick="switchDevice('samsung')" id="tab-samsung" class="px-3 py-1 rounded-full text-white/70 hover:text-white transition-colors">
+        Samsung S24
+      </button>
+      <button onclick="switchDevice('tablet')" id="tab-tablet" class="px-3 py-1 rounded-full text-white/70 hover:text-white transition-colors">
+        iPad Pro 11"
+      </button>
+      <button onclick="switchDevice('desktop')" id="tab-desktop" class="px-3 py-1 rounded-full text-white/70 hover:text-white transition-colors">
+        Desktop (Mac)
+      </button>
+      <button onclick="switchDevice('all')" id="tab-all" class="px-3 py-1 rounded-full text-white/70 hover:text-white transition-colors">
+        Side-by-Side
+      </button>
+    </nav>
+
+    <!-- Controls -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button onclick="toggleOrientation()" id="btn-orientation" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span id="orientation-label">Portrait</span>
+      </button>
+
+      <div class="flex items-center bg-black/80 rounded-full border border-white/10 p-0.5">
+        <button onclick="setScaleMode('fit')" id="scale-btn-fit" class="px-2.5 py-0.5 rounded-full bg-white text-black font-semibold transition-colors">Fit</button>
+        <button onclick="setScaleMode('100')" id="scale-btn-100" class="px-2.5 py-0.5 rounded-full text-white/70 hover:text-white transition-colors">100%</button>
+        <button onclick="setScaleMode('75')" id="scale-btn-75" class="px-2.5 py-0.5 rounded-full text-white/70 hover:text-white transition-colors">75%</button>
+        <button onclick="setScaleMode('50')" id="scale-btn-50" class="px-2.5 py-0.5 rounded-full text-white/70 hover:text-white transition-colors">50%</button>
+      </div>
+
+      <button onclick="reloadPreview()" title="Reload preview frame" class="p-1.5 rounded-full bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+
+      <a href="preview.html" target="_blank" title="Open full prototype in new tab" class="p-1.5 rounded-full bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-colors flex items-center justify-center">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+
+  </header>
+
+  <!-- MAIN STAGE -->
+  <main id="stage" class="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 overflow-auto">
+    
+    <!-- SINGLE DEVICE VIEW -->
+    <div id="single-view-container" class="flex flex-col items-center transition-all">
+      <div id="scaler-wrapper" class="device-scaler-wrapper">
+        <div id="device-chassis" class="device-chassis chassis-iphone">
+          <div id="cutout-element" class="dynamic-island"></div>
+
+          <div id="desktop-chrome-bar" class="desktop-chrome" style="display: none;">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-[#ff5f57] inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-[#febc2e] inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-[#28c840] inline-block"></span>
+            </div>
+            <div class="flex-1 max-w-sm mx-auto bg-black/40 rounded-md px-3 py-1 text-[11px] font-mono text-white/50 text-center border border-white/5 truncate">
+              https://skypalette.app
+            </div>
+          </div>
+
+          <iframe id="main-preview-frame" class="device-iframe" title="Sky Palette Interactive Prototype"></iframe>
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-center gap-3 text-xs text-white/60 font-mono bg-black/60 px-4 py-1.5 rounded-full border border-white/10 shadow-lg">
+        <span id="footer-device-name" class="font-medium text-white">Apple iPhone 16 Pro</span>
+        <span>·</span>
+        <span id="footer-device-res">393 × 852 pt</span>
+        <span>·</span>
+        <span id="footer-device-scale">Scale: 100%</span>
+      </div>
+    </div>
+
+    <!-- SIDE-BY-SIDE ALL DEVICES GRID VIEW -->
+    <div id="all-grid-container" class="hidden flex-wrap items-start justify-center gap-10 max-w-7xl mx-auto py-4">
+      
+      <!-- 1. iPhone 16 Pro Card -->
+      <div class="flex flex-col items-center gap-2.5">
+        <div class="flex items-center gap-2 text-xs font-mono text-white/70">
+          <span class="font-semibold text-white">iPhone 16 Pro</span>
+          <span>·</span>
+          <span>393 × 852 pt</span>
+        </div>
+        <div style="width: 295px; height: 639px;" class="relative">
+          <div class="device-chassis chassis-iphone w-[393px] h-[852px]" style="transform: scale(0.75); transform-origin: top left;">
+            <div class="dynamic-island"></div>
+            <iframe class="grid-preview-frame device-iframe" title="iPhone 16 Pro"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Samsung Galaxy S24 Card -->
+      <div class="flex flex-col items-center gap-2.5">
+        <div class="flex items-center gap-2 text-xs font-mono text-white/70">
+          <span class="font-semibold text-white">Samsung Galaxy S24</span>
+          <span>·</span>
+          <span>412 × 915 px</span>
+        </div>
+        <div style="width: 309px; height: 686px;" class="relative">
+          <div class="device-chassis chassis-samsung w-[412px] h-[915px]" style="transform: scale(0.75); transform-origin: top left;">
+            <div class="punch-hole"></div>
+            <iframe class="grid-preview-frame device-iframe" title="Samsung Galaxy S24"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. iPad Pro 11" Card -->
+      <div class="flex flex-col items-center gap-2.5">
+        <div class="flex items-center gap-2 text-xs font-mono text-white/70">
+          <span class="font-semibold text-white">iPad Pro 11"</span>
+          <span>·</span>
+          <span>834 × 1194 pt</span>
+        </div>
+        <div style="width: 417px; height: 597px;" class="relative">
+          <div class="device-chassis chassis-tablet w-[834px] h-[1194px]" style="transform: scale(0.5); transform-origin: top left;">
+            <iframe class="grid-preview-frame device-iframe" title="iPad Pro 11"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Desktop (1280x800) Card -->
+      <div class="flex flex-col items-center gap-2.5">
+        <div class="flex items-center gap-2 text-xs font-mono text-white/70">
+          <span class="font-semibold text-white">Desktop (MacBook)</span>
+          <span>·</span>
+          <span>1280 × 800 px</span>
+        </div>
+        <div style="width: 640px; height: 419px;" class="relative">
+          <div class="device-chassis chassis-desktop w-[1280px] h-[838px]" style="transform: scale(0.5); transform-origin: top left;">
+            <div style="height: 38px; background: #18191f; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; padding: 0 14px; gap: 12px;">
+              <div class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-[#ff5f57] inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-[#febc2e] inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-[#28c840] inline-block"></span>
+              </div>
+              <div class="flex-1 max-w-xs mx-auto bg-black/40 rounded-md px-3 py-1 text-[11px] font-mono text-white/50 text-center">
+                https://skypalette.app
+              </div>
+            </div>
+            <iframe class="grid-preview-frame device-iframe" style="height: calc(100% - 38px);" title="Desktop"></iframe>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- EMBEDDED PROTOTYPE TEMPLATE -->
+  <template id="preview-app-template">
+<!-- Unslopped with methodology by Damir Sokolovsky (@heydamir), CC BY 4.0 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Palette — Interactive Prototype (Bucharest HQ)</title>
+  <!-- Cloudflare Web Analytics (Privacy-First: Zero Cookies, Zero Storage, Zero Personal Data) -->
+  <!-- In production, activate with: <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "CLOUDFLARE_BEACON_TOKEN"}'></script> -->
+  <!-- Tailwind CSS -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-serif: 'Playfair Display', Georgia, serif;
+      --ease-unslop: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100vh;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: var(--font-sans);
+      background-color: #090b10;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Screen Transitions */
+    .app-screen {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(6px);
+      transition: opacity 0.25s var(--ease-unslop),
+                  transform 0.25s var(--ease-unslop),
+                  visibility 0.25s;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .app-screen.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Range Slider Styling */
+    input[type=range].sky-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+
+    input[type=range].sky-slider:focus {
+      outline: none;
+    }
+
+    input[type=range].sky-slider::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: linear-gradient(to right, 
+        #0d1228 0%, 
+        #121838 12%, 
+        #1b4b8a 35%, 
+        #193f77 50%, 
+        #182348 70%, 
+        #121734 78%, 
+        #943440 85%, 
+        #070913 100%
+      );
+      border-radius: 9999px;
+    }
+
+    input[type=range].sky-slider::-webkit-slider-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: grab;
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -6px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+      border: 2px solid #000000;
+      transition: transform 0.12s var(--ease-unslop);
+    }
+
+    input[type=range].sky-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+      background-color: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* Day Card Fullscreen Styling */
+    .day-tile {
+      transition: filter 0.15s ease-out;
+    }
+    .day-tile:hover {
+      filter: brightness(1.08);
+      z-index: 10;
+    }
+
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      width: 0px;
+      height: 0px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="selection:bg-black selection:text-white">
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] bg-black text-white px-4 py-2 rounded-full text-xs font-mono border border-white/20 shadow-2xl opacity-0 pointer-events-none -translate-y-2 transition-all duration-200">
+    <span id="toast-msg">Copied</span>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- DYNAMIC BOTTOM DOCK (Responsive & Unified Height)        -->
+  <!-- ======================================================== -->
+  <div class="fixed bottom-4 sm:bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 select-none">
+    
+    <!-- Dynamic Navigation Pill (Same height as search bar) -->
+    <nav aria-label="Screen navigation" class="flex items-center gap-1.5 sm:gap-2 p-1.5 bg-black text-white rounded-full shadow-2xl border border-white/20 text-sm sm:text-base font-medium h-[52px] sm:h-[56px]">
+      <button onclick="navigateTo('screen-home')" id="nav-btn-home" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors bg-white text-black font-semibold shadow-md">
+        Home
+      </button>
+      <button onclick="handleGalleryNav()" id="nav-btn-gallery" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+        Gallery
+      </button>
+      <button onclick="openSubmitModal()" id="nav-btn-submit" class="h-full px-5 sm:px-7 rounded-full flex items-center justify-center transition-colors text-white/70 hover:text-white hover:bg-white/10">
+        Submit
+      </button>
+    </nav>
+
+    <!-- Dedicated Circular Share Button (Same width/height as search bar) -->
+    <button onclick="triggerShare()" id="dock-share-btn" title="Share palette" class="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-full bg-black text-white hover:bg-neutral-800 flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-95 shrink-0">
+      <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"/>
+        <circle cx="6" cy="12" r="3"/>
+        <circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+    </button>
+
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 1: HOME (Live Bucharest Sky & Step Scrubber)      -->
+  <!-- ======================================================== -->
+  <section id="screen-home" class="app-screen active flex flex-col justify-between overflow-hidden">
+    <!-- Top Spacer & Discreet Info Button -->
+    <div class="w-full pt-4 sm:pt-6"></div>
+    <button onclick="openInfoModal()" title="About Sky Palette, Tech & Licenses" aria-label="About Sky Palette" class="fixed top-4 right-4 sm:top-5 sm:right-6 z-40 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md border border-white/20 text-white/70 hover:text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer">
+      <svg class="w-4 h-4 sm:w-4.5 sm:h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+    </button>
+
+    <!-- Center Stage: Location Header + Search + Solar Hour Slider -->
+    <main class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 max-w-xl mx-auto w-full">
+      
+      <!-- 1. Bucharest HQ with Time Only on top of Search -->
+      <div class="flex items-center justify-center gap-1.5 mb-2.5 select-none text-[11px] sm:text-xs text-white/80 font-mono tracking-tight">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span class="font-medium text-white/90">Bucharest HQ</span>
+        <span class="text-white/40">·</span>
+        <span id="bucharest-clock" class="text-white tabular-nums">15:17 EET</span>
+      </div>
+
+      <!-- 2. Pure Black Rounded Search Bar -->
+      <div class="w-full relative mb-5">
+        <div class="relative flex items-center bg-black text-white rounded-full h-[52px] sm:h-[56px] px-6 shadow-2xl">
+          <!-- Search Icon -->
+          <svg class="w-4 h-4 text-white/80 mr-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          
+          <input 
+            type="text" 
+            id="city-search-input"
+            placeholder="Search city or postal code" 
+            autocomplete="off"
+            class="w-full bg-transparent border-none text-white placeholder:text-white/40 placeholder:text-xs sm:placeholder:text-sm text-xs sm:text-sm focus:outline-none py-0.5 pr-2 font-normal"
+          />
+        </div>
+
+        <!-- Black Rounded-3xl Popover Dropdown with White Text -->
+        <div id="city-dropdown" class="absolute left-0 right-0 top-full mt-3 bg-black text-white rounded-3xl overflow-hidden divide-y divide-white/10 hidden z-30 border border-white/20 shadow-2xl max-h-72 overflow-y-auto">
+          <!-- Dynamic suggestion rows populated by JS -->
+        </div>
+      </div>
+
+      
+
+      <!-- Suggested Cities (No background, 'Suggested:' prefix) -->
+      <div class="flex flex-wrap items-center justify-center gap-3 mt-1 text-xs text-white/90">
+        <span class="text-white/50 font-normal">Suggested:</span>
+        <button onclick="selectCity('Bucharest, Romania')" class="text-white font-semibold underline-offset-4 hover:underline">
+          Bucharest (HQ)
+        </button>
+        <button onclick="selectCity('Tokyo, Japan')" class="text-white/80 hover:text-white transition-colors underline-offset-4 hover:underline">
+          Tokyo
+        </button>
+        <button onclick="selectCity('Reykjavik, Iceland')" class="text-white/80 hover:text-white transition-colors underline-offset-4 hover:underline">
+          Reykjavik
+        </button>
+        <button onclick="selectCity('Paris, France')" class="text-white/80 hover:text-white transition-colors underline-offset-4 hover:underline">
+          Paris
+        </button>
+        <button onclick="selectCity('Buenos Aires, Argentina')" class="text-white/80 hover:text-white transition-colors underline-offset-4 hover:underline">
+          Buenos Aires
+        </button>
+      </div>
+
+    </main>
+
+    <!-- Footer: Quiet single line -->
+    
+    <!-- ======================================================== -->
+    <!-- HORIZONTAL RULER JOG-DIAL SCRUBBER (00:00 -> LIVE)       -->
+    <!-- ======================================================== -->
+    <div id="ruler-slider-container" class="relative z-30 mb-36 sm:mb-36 md:mb-40 flex flex-col items-center select-none w-full max-w-sm mx-auto px-4">
+      
+      <!-- Time Display directly above center tick (Expands when scrolling, compact when resting) -->
+      <div class="h-7 flex items-center justify-center mb-1 select-none">
+        <span 
+          id="ruler-time-display" 
+          class="font-sans font-semibold tracking-tight text-black text-xs sm:text-sm transition-all duration-150 tabular-nums drop-shadow-xs"
+        >15:17</span>
+      </div>
+
+      <!-- Ruler Tape Viewport with Soft Left/Right Fade Mask -->
+      <div 
+        id="ruler-viewport" 
+        class="relative w-64 sm:w-72 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none overflow-hidden"
+        style="-webkit-mask-image: linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%); mask-image: linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%);"
+      >
+        <!-- Horizontal Moving Tape -->
+        <div id="ruler-tape" class="absolute top-0 bottom-0 flex items-center will-change-transform" style="left: 50%; transform: translateX(0px);">
+          <!-- Discrete Ticks generated dynamically by JS -->
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 2: CITY GALLERY (Full Screen Mosaic + Popovers)   -->
+  <!-- ======================================================== -->
+  <section id="screen-gallery" class="app-screen bg-[#090b10]">
+    
+    <!-- Dynamic Full-bleed Mosaic Grid (Zero Gap, Zero Vertical Scroll) -->
+    <main class="w-full h-full p-0 m-0 overflow-hidden">
+      <div id="day-cards-grid" class="w-full h-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 grid-rows-8 sm:grid-rows-5 md:grid-rows-3 gap-0 overflow-hidden">
+        <!-- Tiles dynamically rendered by JS -->
+      </div>
+    </main>
+
+    <!-- Top Floating Header Bar (Responsive, Collision & Overflow Proof on Mobile) -->
+    <header class="fixed top-3 left-3 right-3 sm:top-5 sm:left-6 sm:right-6 z-40 flex items-center justify-between gap-2 pointer-events-none">
+      <!-- Top-Left Floating City Search Trigger -->
+      <button onclick="openGallerySearchModal()" class="pointer-events-auto flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-black/80 backdrop-blur-md text-white text-xs font-mono border border-white/20 hover:border-white/40 transition-colors shadow-2xl cursor-pointer min-w-0 max-w-[55%]">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+        <span id="gallery-city-badge" class="truncate">Bucharest · HQ · 44.4°N</span>
+        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/60 ml-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+
+      <!-- Top-Right Interval & Solar Phase Popover Trigger + Discreet Info Button -->
+      <div class="pointer-events-auto flex items-center gap-1.5 shrink-0">
+        <div class="relative">
+          <button onclick="toggleIntervalPopover()" id="interval-trigger-btn" class="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-black/80 backdrop-blur-md text-white text-xs font-mono border border-white/20 hover:border-white/40 transition-colors shadow-2xl cursor-pointer">
+            <span id="current-interval-label" class="hidden sm:inline">15-Day Sunset Mosaic</span>
+            <span id="current-interval-label-mobile" class="sm:hidden font-mono text-[11px]">15D Mosaic</span>
+            <svg class="w-3 h-3 text-white/60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <!-- Interval Selector Popover Menu -->
+          <div id="interval-popover" class="absolute right-0 top-full mt-2 w-52 sm:w-56 bg-black text-white rounded-2xl border border-white/20 shadow-2xl p-3 hidden z-50 divide-y divide-white/10 text-xs">
+            <!-- Interval Choice -->
+            <div class="pb-2.5">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-1.5 px-2">Days Interval</div>
+              <div class="grid grid-cols-3 gap-1">
+                <button onclick="setIntervalDays(7)" id="int-btn-7" class="px-2 py-1.5 rounded-lg text-white/70 hover:bg-white/10 text-center font-mono">7D</button>
+                <button onclick="setIntervalDays(15)" id="int-btn-15" class="px-2 py-1.5 rounded-lg bg-white text-black font-semibold text-center font-mono">15D</button>
+                <button onclick="setIntervalDays(30)" id="int-btn-30" class="px-2 py-1.5 rounded-lg text-white/70 hover:bg-white/10 text-center font-mono">30D</button>
+              </div>
+            </div>
+
+            <!-- Solar Phase Choice -->
+            <div class="pt-2.5 space-y-1">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-1 px-2">Solar Moment</div>
+              <button onclick="setIntervalPhase('Sunset')" class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left flex items-center justify-between text-white/90">
+                <span>Sunset (Default)</span>
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              </button>
+              <button onclick="setIntervalPhase('Golden Hour')" class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left flex items-center justify-between text-white/70 hover:text-white">
+                <span>Golden Hour</span>
+                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
+              </button>
+              <button onclick="setIntervalPhase('Solar Noon')" class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left flex items-center justify-between text-white/70 hover:text-white">
+                <span>Solar Noon</span>
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+              </button>
+              <button onclick="setIntervalPhase('Sunrise')" class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left flex items-center justify-between text-white/70 hover:text-white">
+                <span>Sunrise</span>
+                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discreet Info Button in Gallery Header -->
+        <button onclick="openInfoModal()" title="About & Project Info" aria-label="About Sky Palette" class="w-8 h-8 rounded-full bg-black/80 hover:bg-black backdrop-blur-md border border-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors shadow-2xl cursor-pointer">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- GALLERY LOCATION SEARCH MODAL (Light Variant)            -->
+  <!-- ======================================================== -->
+  <div id="gallery-search-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 opacity-0 pointer-events-none transition-[opacity] duration-200">
+    <div onclick="closeGallerySearchModal()" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-lg bg-white text-neutral-900 rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 transform scale-95 transition-[transform,opacity] duration-200 p-6 flex flex-col space-y-4">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
+        <div>
+          <h3 class="text-base font-semibold text-neutral-900">Search Location</h3>
+          <p class="text-xs text-neutral-400">Switch gallery to another city or postal code</p>
+        </div>
+        <button onclick="closeGallerySearchModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Search Bar: White Background with Black Content -->
+      <div class="relative flex items-center bg-white text-black rounded-full h-[52px] px-5 border border-black/15 focus-within:border-black shadow-xs transition-colors">
+        <svg class="w-4 h-4 text-neutral-500 mr-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input 
+          type="text" 
+          id="modal-city-search-input"
+          placeholder="Search city or postal code" 
+          autocomplete="off"
+          class="w-full bg-transparent border-none text-black placeholder:text-neutral-400 placeholder:text-xs sm:placeholder:text-sm text-xs sm:text-sm focus:outline-none font-medium"
+        />
+      </div>
+
+      <!-- Autocomplete list in modal -->
+      <div id="modal-city-dropdown" class="rounded-2xl divide-y divide-neutral-100 bg-white border border-neutral-200/80 shadow-xl max-h-56 overflow-y-auto hidden"></div>
+
+      <!-- Quick Picks -->
+      <div class="space-y-2 pt-1">
+        <span class="text-xs text-neutral-400 font-mono tracking-wider">POPULAR SKIES</span>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button onclick="confirmLocation('Bucharest, Romania')" class="px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Bucharest (HQ)</span>
+            <span class="text-[10px] text-neutral-400 font-mono">44.4°N</span>
+          </button>
+          <button onclick="confirmLocation('Tokyo, Japan')" class="px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Tokyo, Japan</span>
+            <span class="text-[10px] text-neutral-400 font-mono">35.6°N</span>
+          </button>
+          <button onclick="confirmLocation('Reykjavik, Iceland')" class="px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Reykjavik</span>
+            <span class="text-[10px] text-neutral-400 font-mono">64.1°N</span>
+          </button>
+          <button onclick="confirmLocation('Paris, France')" class="px-3.5 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 hover:text-black text-left font-medium transition-colors flex items-center justify-between">
+            <span>Paris, France</span>
+            <span class="text-[10px] text-neutral-400 font-mono">48.8°N</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 3: DAY DETAIL (Full White, No Top Bar, Back Btn)  -->
+  <!-- ======================================================== -->
+  <section id="screen-detail" class="app-screen bg-white text-[#111827] flex flex-col justify-between p-3 sm:p-6 md:p-8 overflow-y-auto sm:overflow-hidden select-none">
+    
+    <div class="max-w-4xl mx-auto w-full h-full flex flex-col justify-between pb-20 sm:pb-16 min-h-[580px] sm:min-h-0">
+      
+      <!-- Minimal Header Info with Back to Gallery Button (Overflow-Proof) -->
+      <div class="flex items-center justify-between pt-1 pb-2 shrink-0 gap-2 min-w-0">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <button onclick="navigateTo('screen-gallery')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition-colors shrink-0">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>Gallery</span>
+          </button>
+
+          <div class="min-w-0">
+            <h2 id="detail-title" class="text-sm sm:text-base md:text-lg font-semibold text-black tracking-tight truncate">
+              Nov 14 · Bucharest
+            </h2>
+            <p id="detail-time-phase" class="text-[11px] sm:text-xs text-neutral-500 font-mono tabular-nums truncate">
+              16:51 · Sunset transition
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <!-- Reference Photo Mode Indicator -->
+          <div id="ref-mode-badge" class="hidden items-center gap-1.5 sm:gap-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-800 font-medium border border-black/10 text-[10px] sm:text-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+              <span id="ref-mode-text" class="hidden sm:inline">Reference photo active</span>
+              <span class="sm:hidden">Photo active</span>
+            </span>
+            <button onclick="clearReferencePhoto()" class="text-[11px] sm:text-xs text-neutral-400 hover:text-black underline underline-offset-2">
+              Reset
+            </button>
+          </div>
+
+          <!-- Discreet Info Button in Day Detail -->
+          <button onclick="openInfoModal()" title="About & Project Info" aria-label="About Sky Palette" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 hover:text-black flex items-center justify-center transition-colors cursor-pointer">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- HERO VIEWPORT: Live Simulation & Reference Image Split/Display -->
+      <div class="relative w-full h-[26vh] sm:h-[30vh] md:h-[34vh] min-h-[160px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs shrink-0 bg-neutral-100">
+        
+        <!-- Live Gradient Renderer -->
+        <div id="sky-renderer" class="absolute inset-0 w-full h-full transition-[background] duration-150 ease-out"></div>
+        
+        <!-- Subtle Sun Orb -->
+        <div id="sun-orb" class="absolute left-1/2 -translate-x-1/2 w-28 h-28 sm:w-32 sm:h-32 rounded-full pointer-events-none filter blur-xl opacity-40 transition-[top,background] duration-200"></div>
+
+        <!-- REFERENCE IMAGE OVERLAY PANEL (Appears when community photo clicked) -->
+        <div id="ref-photo-overlay" class="absolute inset-y-0 right-0 w-full sm:w-1/2 bg-black/85 backdrop-blur-md text-white p-3 sm:p-4 transition-transform duration-300 translate-x-full flex flex-col justify-between border-l border-white/10 z-20">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-mono text-white/70 text-[11px] sm:text-xs" id="ref-photo-time">Capture: 16:52 EET</span>
+            <button onclick="clearReferencePhoto()" class="p-1 text-white/60 hover:text-white rounded-full">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <!-- Reference Image Mock -->
+          <div class="my-auto rounded-xl sm:rounded-2xl overflow-hidden aspect-[16/10] relative shadow-lg border border-white/20">
+            <div id="ref-photo-gradient" class="w-full h-full bg-gradient-to-b from-[#121734] via-[#943440] to-[#fc9858] flex items-end p-2.5 sm:p-3">
+              <div class="bg-black/60 backdrop-blur-sm text-white px-2 py-0.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-mono truncate" id="ref-photo-location">
+                Herastrau Park, Bucharest
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-white/70">
+            <span id="ref-photo-author">@sky-bucharest-48b</span>
+            <span class="text-emerald-400 font-mono">Matched Palette</span>
+          </div>
+        </div>
+
+        <!-- Live Metrics HUD inside Sky Viewport -->
+        <div class="absolute top-2.5 left-3 sm:top-4 sm:left-4 flex flex-col gap-0.5 text-white z-10">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <span id="hud-time" class="text-xl sm:text-2xl md:text-3xl font-light font-mono tabular-nums">16:51</span>
+            <span id="hud-phase-pill" class="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium bg-black/40 backdrop-blur-sm border border-white/20 text-white">
+              Sunset
+            </span>
+          </div>
+          <span id="hud-solar-metrics" class="text-[10px] sm:text-[11px] text-white/80 font-mono tabular-nums">
+            Sun elevation: +0.8° · Azimuth: 236°
+          </span>
+        </div>
+
+        <div class="absolute bottom-2.5 left-3 sm:bottom-4 sm:left-4 text-white/80 text-[10px] sm:text-[11px] font-mono z-10">
+          <div>Preetham physical sky model</div>
+        </div>
+      </div>
+
+      <!-- 5 PALETTE SWATCHES (Clean, unboxed without container cards) -->
+      <div class="space-y-1 shrink-0 pt-1">
+        <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-neutral-400 font-mono">
+          <span>5-SWATCH PROFILE</span>
+          <span>Tap to copy</span>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5 sm:gap-3">
+          
+          <div onclick="copyHex('zenith-hex')" class="cursor-pointer group text-center min-w-0">
+            <div id="swatch-zenith" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02]"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Zenith</div>
+            <div id="zenith-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">#121734</div>
+          </div>
+
+          <div onclick="copyHex('midsky-hex')" class="cursor-pointer group text-center min-w-0">
+            <div id="swatch-midsky" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02]"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Mid-Sky</div>
+            <div id="midsky-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">#2A1F42</div>
+          </div>
+
+          <div onclick="copyHex('horizon-hex')" class="cursor-pointer group text-center min-w-0">
+            <div id="swatch-horizon" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02]"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Horizon</div>
+            <div id="horizon-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">#943440</div>
+          </div>
+
+          <div onclick="copyHex('sunglow-hex')" class="cursor-pointer group text-center min-w-0">
+            <div id="swatch-sunglow" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02]"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Sun Glow</div>
+            <div id="sunglow-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">#E06038</div>
+          </div>
+
+          <div onclick="copyHex('cloudtint-hex')" class="cursor-pointer group text-center min-w-0">
+            <div id="swatch-cloudtint" class="w-full aspect-[16/9] rounded-xl mb-1 transition-transform group-hover:scale-[1.02]"></div>
+            <div class="text-[11px] sm:text-xs font-medium text-black truncate">Cloud Tint</div>
+            <div id="cloudtint-hex" class="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-500 group-hover:text-black truncate">#FC9858</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- HORIZONTAL RULER JOG-DIAL SCRUBBER FOR DAY DETAIL        -->
+      <!-- ======================================================== -->
+      <div id="detail-ruler-container" class="relative z-20 flex flex-col items-center select-none w-full max-w-sm mx-auto px-2 pt-1 shrink-0">
+        
+        <!-- Controls row: Play button + Time Display + Quick Phase Jumps -->
+        <div class="w-full flex items-center justify-between mb-1 px-1 sm:px-2 select-none">
+          <button id="timelapse-btn" onclick="toggleTimelapse()" class="w-7 h-7 rounded-full bg-black hover:bg-neutral-800 text-white flex items-center justify-center transition-transform active:scale-95 shadow-sm shrink-0" title="Play timelapse">
+            <svg id="play-icon" class="w-3 h-3 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="pause-icon" class="w-3 h-3 hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+
+          <!-- Centered Time Display directly above center tick (Expands smoothly on drag) -->
+          <div class="h-7 flex items-center justify-center select-none">
+            <span 
+              id="detail-ruler-time-display" 
+              class="font-sans font-semibold tracking-tight text-black text-xs sm:text-sm transition-all duration-150 tabular-nums"
+            >16:51</span>
+          </div>
+
+          <!-- Quick Jump Buttons (overflow-proof) -->
+          <div class="flex items-center gap-1 text-[10px] sm:text-[11px]">
+            <button onclick="smoothScrollDetailToHour(12.0)" class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">12:00</button>
+            <button onclick="smoothScrollDetailToHour(16.5)" class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">Golden</button>
+            <button onclick="smoothScrollDetailToHour(16.85)" class="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium transition-colors">Sunset</button>
+          </div>
+        </div>
+
+        <!-- Ruler Tape Viewport with Soft Left/Right Fade Mask -->
+        <div 
+          id="detail-ruler-viewport" 
+          class="relative w-64 sm:w-72 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none overflow-hidden"
+          style="-webkit-mask-image: linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%); mask-image: linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%);"
+        >
+          <!-- Horizontal Moving Tape -->
+          <div id="detail-ruler-tape" class="absolute top-0 bottom-0 flex items-center will-change-transform" style="left: 50%; transform: translateX(0px);">
+            <!-- Discrete Ticks generated dynamically by JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COMMUNITY PHOTOS STRIP -->
+      <div class="space-y-1.5 shrink-0 pt-1">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-medium text-black">Photos from this day</span>
+          <span class="text-[10px] sm:text-[11px] font-mono text-neutral-400">Click photo for reference image</span>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 sm:gap-3">
+          <div onclick="selectReferencePhoto(0)" class="cursor-pointer group select-none min-w-0">
+            <div class="h-14 sm:h-16 rounded-xl sm:rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#121838] via-[#8c3b52] to-[#fca25e] transition-transform group-hover:scale-[1.02]">
+              <span class="absolute top-1 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono tabular-nums bg-black/60 text-white">07:18</span>
+            </div>
+            <div class="pt-1 truncate text-[10px] sm:text-[11px] font-medium text-black" id="ref-loc-0">Herastrau Park</div>
+          </div>
+
+          <div onclick="selectReferencePhoto(1)" class="cursor-pointer group select-none min-w-0">
+            <div class="h-14 sm:h-16 rounded-xl sm:rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#193f77] via-[#5788bf] to-[#fce2ad] transition-transform group-hover:scale-[1.02]">
+              <span class="absolute top-1 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono tabular-nums bg-black/60 text-white">15:02</span>
+            </div>
+            <div class="pt-1 truncate text-[10px] sm:text-[11px] font-medium text-black" id="ref-loc-1">Calea Victoriei</div>
+          </div>
+
+          <div onclick="selectReferencePhoto(2)" class="cursor-pointer group select-none min-w-0">
+            <div class="h-14 sm:h-16 rounded-xl sm:rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#121734] via-[#943440] to-[#fc9858] transition-transform group-hover:scale-[1.02] ring-2 ring-black">
+              <span class="absolute top-1 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono tabular-nums bg-black/60 text-white">16:51</span>
+              <span class="absolute top-1 right-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-mono bg-black text-white">Active</span>
+            </div>
+            <div class="pt-1 truncate text-[10px] sm:text-[11px] font-medium text-black" id="ref-loc-2">Dambovita Quay</div>
+          </div>
+
+          <div onclick="selectReferencePhoto(3)" class="cursor-pointer group select-none min-w-0">
+            <div class="h-14 sm:h-16 rounded-xl sm:rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#0e1226] via-[#4a2038] to-[#782c3c] transition-transform group-hover:scale-[1.02]">
+              <span class="absolute top-1 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono tabular-nums bg-black/60 text-white">17:25</span>
+            </div>
+            <div class="pt-1 truncate text-[10px] sm:text-[11px] font-medium text-black" id="ref-loc-3">Palace of Parliament</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+    </div>
+  </section>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 4: SUBMIT FLOW MODAL                              -->
+  <!-- ======================================================== -->
+  <div id="submit-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 opacity-0 pointer-events-none transition-[opacity] duration-200">
+    <div onclick="closeSubmitModal()" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 transform scale-95 transition-[transform,opacity] duration-200 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5">
+        <div>
+          <h3 class="text-base font-semibold text-black">Share a photo of your sky</h3>
+        </div>
+        <button onclick="closeSubmitModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="px-6 py-5 overflow-y-auto space-y-5">
+        <div id="upload-dropzone" class="border-2 border-dashed border-black/15 hover:border-black bg-neutral-50/80 hover:bg-neutral-100/80 rounded-2xl p-4 sm:p-5 text-center cursor-pointer transition-colors group">
+          <input type="file" id="sky-file-input" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+          <div onclick="document.getElementById('sky-file-input').click()">
+            <div class="w-10 h-10 mx-auto rounded-full bg-white border border-black/10 flex items-center justify-center text-black mb-2 shadow-xs group-hover:scale-105 transition-transform">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="text-sm font-medium text-black">Drop your sky photo here</p>
+            <p class="text-xs text-neutral-400 mt-0.5">or <span class="text-black underline underline-offset-2">choose from gallery</span></p>
+            <p class="text-[11px] text-neutral-400 mt-1.5 font-mono">JPG, PNG, HEIC up to 25MB · EXIF extracted</p>
+          </div>
+        </div>
+
+        <!-- Location and Capture Time on the same line with leading icons (No labels) -->
+        <div class="flex items-center gap-3">
+          <!-- Location Field with Leading MapPin Icon -->
+          <div class="relative flex-1 min-w-0 flex items-center bg-neutral-50 rounded-full border border-black/10 focus-within:border-black px-4 py-2.5 transition-colors">
+            <svg class="w-4 h-4 text-neutral-400 mr-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <input 
+              type="text" 
+              id="submit-location-input" 
+              value="Bucharest, Romania" 
+              placeholder="City, Country"
+              class="w-full bg-transparent border-none text-xs text-black focus:outline-none font-medium truncate"
+            />
+          </div>
+
+          <!-- Capture Time Field with Leading Clock Icon -->
+          <div class="relative w-32 sm:w-36 shrink-0 flex items-center bg-neutral-50 rounded-full border border-black/10 focus-within:border-black px-4 py-2.5 transition-colors">
+            <svg class="w-4 h-4 text-neutral-400 mr-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <input 
+              type="time" 
+              id="submit-time-input" 
+              value="16:51" 
+              class="w-full bg-transparent border-none text-xs text-black focus:outline-none font-mono font-medium"
+            />
+          </div>
+        </div>
+
+        <!-- Extracted Colors Section (Clean Unboxed Canvas, Airy Spacing) -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between text-xs px-0.5">
+            <span class="font-semibold text-black tracking-tight text-xs sm:text-sm">Extracted colors</span>
+            <span class="text-xs text-emerald-600 font-mono font-medium flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Valid sky photo
+            </span>
+          </div>
+
+          <div class="grid grid-cols-5 gap-3.5 items-stretch">
+            <div class="col-span-2 relative rounded-2xl overflow-hidden aspect-[4/3] bg-gradient-to-b from-[#121734] via-[#943440] to-[#fc9858] border border-black/10 shadow-xs">
+              <div class="absolute bottom-1.5 left-2 px-1.5 py-0.5 rounded text-[9px] font-mono tabular-nums bg-black/60 text-white backdrop-blur-xs">IMG_5891.HEIC</div>
+            </div>
+
+            <!-- Hex text with quick circled color previews directly beside their hex -->
+            <div class="col-span-3 flex flex-col justify-between py-0.5">
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10" style="background-color: #121734;"></div>
+                  <span class="text-xs font-mono tabular-nums text-neutral-900 font-medium">#121734</span>
+                </div>
+                <span class="text-[11px] text-neutral-400 font-sans">Zenith</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10" style="background-color: #2A1F42;"></div>
+                  <span class="text-xs font-mono tabular-nums text-neutral-900 font-medium">#2A1F42</span>
+                </div>
+                <span class="text-[11px] text-neutral-400 font-sans">Mid-Sky</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10" style="background-color: #943440;"></div>
+                  <span class="text-xs font-mono tabular-nums text-neutral-900 font-medium">#943440</span>
+                </div>
+                <span class="text-[11px] text-neutral-400 font-sans">Horizon</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10" style="background-color: #E06038;"></div>
+                  <span class="text-xs font-mono tabular-nums text-neutral-900 font-medium">#E06038</span>
+                </div>
+                <span class="text-[11px] text-neutral-400 font-sans">Sun Glow</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                  <div class="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs border border-black/10" style="background-color: #FC9858;"></div>
+                  <span class="text-xs font-mono tabular-nums text-neutral-900 font-medium">#FC9858</span>
+                </div>
+                <span class="text-[11px] text-neutral-400 font-sans">Cloud</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contributor Handle Pill -->
+        <div class="flex items-center justify-between text-xs bg-neutral-50 px-4 py-2.5 rounded-full border border-black/10">
+          <div class="flex items-center gap-2">
+            <span class="text-neutral-400 text-xs">Contributor handle:</span>
+            <span id="contributor-handle" class="font-mono tabular-nums font-semibold text-black">sky-bucharest-48b</span>
+          </div>
+          <button onclick="randomizeHandle()" title="Generate another anonymous handle" class="text-xs text-neutral-500 hover:text-black flex items-center gap-1.5 transition-colors px-2.5 py-0.5 rounded-full hover:bg-neutral-200/60 font-medium">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span>Regen</span>
+          </button>
+        </div>
+
+        <button id="submit-btn" onclick="submitSky()" class="w-full py-3.5 px-6 rounded-full bg-black hover:bg-neutral-800 text-white font-medium text-sm transition-colors active:scale-[0.98] shadow-sm flex items-center justify-center gap-2">
+          <span>Submit for review</span>
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+
+        <p class="text-[11px] text-neutral-400 text-center leading-relaxed">
+          No account needed · Automated solar physics & quality review
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 5: SHARE MODAL (4 Clean Distinct Card Styles)     -->
+  <!-- ======================================================== -->
+  <div id="share-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 opacity-0 pointer-events-none transition-[opacity] duration-200">
+    <div onclick="closeShareModal()" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 transform scale-95 transition-[transform,opacity] duration-200 max-h-[96vh] flex flex-col">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-3 border-b border-black/5">
+        <div>
+          <h3 class="text-base font-semibold text-black">Share Sky Card</h3>
+          <p class="text-xs text-neutral-500">Select an aesthetic card layout</p>
+        </div>
+        <button onclick="closeShareModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="px-6 py-4 overflow-y-auto space-y-4">
+        
+        <!-- Style Switcher (4 Distinct Archetypes) -->
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-neutral-500 font-medium">Style</span>
+          <div class="inline-flex p-0.5 rounded-full bg-neutral-100 border border-black/5 text-[11px] font-medium">
+            <button onclick="setCardStyle('studio')" id="btn-style-studio" class="px-3 py-1 rounded-full bg-black text-white shadow-sm transition-colors">Studio</button>
+            <button onclick="setCardStyle('telemetry')" id="btn-style-telemetry" class="px-3 py-1 rounded-full text-neutral-600 hover:text-black transition-colors">Telemetry</button>
+            <button onclick="setCardStyle('horizon')" id="btn-style-horizon" class="px-3 py-1 rounded-full text-neutral-600 hover:text-black transition-colors">Horizon</button>
+            <button onclick="setCardStyle('monolith')" id="btn-style-monolith" class="px-3 py-1 rounded-full text-neutral-600 hover:text-black transition-colors">Monolith</button>
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- CARD CONTAINER (Dynamically Populated by Style) -->
+        <!-- ============================================== -->
+        <div id="share-card-container" class="w-full transition-all">
+          
+          <!-- 1. STUDIO VARIANT (Light / Architectural / Minimalist Editorial) -->
+          <div id="card-variant-studio" class="w-full rounded-2xl p-6 bg-[#FAFAFC] text-[#111827] border border-black/10 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <!-- Header -->
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="text-[10px] font-mono tracking-widest uppercase text-neutral-400">Sky Palette · No. 14</span>
+                <h4 class="text-2xl font-bold tracking-tight text-black mt-0.5" id="studio-city">BUCHAREST</h4>
+                <p class="text-[11px] text-neutral-500 font-mono" id="studio-coords">44.4268° N, 26.1025° E</p>
+              </div>
+              <div class="text-right">
+                <span class="px-2.5 py-1 rounded-full bg-black text-white text-[10px] font-mono font-medium" id="studio-date">NOV 14</span>
+              </div>
+            </div>
+
+            <!-- 5 Architectural Vertical Color Columns -->
+            <div class="my-4 flex-1 flex flex-col justify-center">
+              <div class="w-full h-36 rounded-xl overflow-hidden grid grid-cols-5 gap-0 shadow-md border border-black/5 relative">
+                <div class="h-full w-full swatch-val-0" style="background:#121734;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#2A1F42;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#943440;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#E06038;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#FC9858;"></div>
+              </div>
+              <div class="grid grid-cols-5 gap-1 mt-2 text-center text-[9px] font-mono text-neutral-500">
+                <span class="hex-val-0">#121734</span>
+                <span class="hex-val-1">#2A1F42</span>
+                <span class="hex-val-2">#943440</span>
+                <span class="hex-val-3">#E06038</span>
+                <span class="hex-val-4">#FC9858</span>
+              </div>
+            </div>
+
+            <!-- Footer: Clean Wordmark Only -->
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-neutral-400 border-t border-black/5">
+              <span>Sunset 16:51 EET</span>
+              <span class="text-black font-semibold">skypalette.app</span>
+            </div>
+          </div>
+
+          <!-- 2. TELEMETRY VARIANT (Dark Mode / Monospaced Strava Athleisure) -->
+          <div id="card-variant-telemetry" class="hidden w-full rounded-2xl p-6 bg-[#0B0D12] text-white border border-white/15 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <div>
+              <div class="flex items-center gap-1.5 text-[10px] font-mono tracking-widest uppercase text-emerald-400 mb-0.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Solar Telemetry Log</span>
+              </div>
+              <h4 class="text-xl font-bold font-mono tracking-tight text-white" id="telemetry-city">BUCHAREST HQ</h4>
+              <p class="text-[10px] font-mono text-white/50" id="telemetry-coords">44.4268° N, 26.1025° E · ROMANIA</p>
+            </div>
+
+            <div class="my-3">
+              <div class="w-full h-24 rounded-lg overflow-hidden grid grid-cols-5 gap-0 shadow-lg border border-white/10 relative">
+                <div class="h-full w-full swatch-val-0" style="background:#121734;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#2A1F42;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#943440;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#E06038;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#FC9858;"></div>
+                <div class="absolute top-[80%] inset-x-0 h-px bg-white/30"></div>
+              </div>
+              <div class="grid grid-cols-5 gap-1 mt-1.5 text-center text-[9px] font-mono text-white/60">
+                <span class="hex-val-0">#121734</span>
+                <span class="hex-val-1">#2A1F42</span>
+                <span class="hex-val-2">#943440</span>
+                <span class="hex-val-3">#E06038</span>
+                <span class="hex-val-4">#FC9858</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-center font-mono text-xs">
+              <div>
+                <div class="text-[9px] uppercase text-white/40">Sunset Peak</div>
+                <div class="text-sm font-bold text-white mt-0.5" id="telemetry-sunset">16:51</div>
+              </div>
+              <div class="border-l border-white/10">
+                <div class="text-[9px] uppercase text-white/40">Solar Arc</div>
+                <div class="text-sm font-bold text-amber-300 mt-0.5">+0.8° ELEV</div>
+              </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-white/40">
+              <span id="telemetry-date">NOV 14</span>
+              <span class="text-white/70">skypalette.app</span>
+            </div>
+          </div>
+
+          <!-- 3. HORIZON VARIANT (Warm Gallery Art Print / Serif) -->
+          <div id="card-variant-horizon" class="hidden w-full rounded-2xl p-6 bg-[#0E111A] text-amber-50 border border-white/15 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none" style="background: radial-gradient(ellipse at bottom, rgba(224,96,56,0.25) 0%, #0E111A 70%);">
+            <div>
+              <span class="text-[10px] font-mono uppercase tracking-widest text-amber-300/70">Atelier Exhibition</span>
+              <h4 class="text-2xl font-serif italic text-amber-100 mt-0.5" id="horizon-title">Sky above Bucharest</h4>
+              <p class="text-[11px] text-white/50 font-mono">Sunset Palette Transition</p>
+            </div>
+
+            <!-- Soft Rounded Palette Capsule -->
+            <div class="my-4">
+              <div class="w-full h-32 rounded-2xl overflow-hidden grid grid-cols-5 gap-0 shadow-2xl border border-white/20">
+                <div class="h-full w-full swatch-val-0" style="background:#121734;"></div>
+                <div class="h-full w-full swatch-val-1" style="background:#2A1F42;"></div>
+                <div class="h-full w-full swatch-val-2" style="background:#943440;"></div>
+                <div class="h-full w-full swatch-val-3" style="background:#E06038;"></div>
+                <div class="h-full w-full swatch-val-4" style="background:#FC9858;"></div>
+              </div>
+              <div class="flex justify-between items-center px-1 mt-2 text-[10px] font-mono text-amber-200/60">
+                <span>Zenith</span>
+                <span>Horizon</span>
+                <span>Sun Glow</span>
+              </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-between text-[10px] font-mono text-amber-100/60 border-t border-white/10">
+              <span id="horizon-date">November 14 · 16:51</span>
+              <span class="tracking-wider">Sky Palette Gallery</span>
+            </div>
+          </div>
+
+          <!-- 4. MONOLITH VARIANT (Stark Bold Color Field) -->
+          <div id="card-variant-monolith" class="hidden w-full rounded-2xl p-0 bg-black text-white border border-white/20 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/5] select-none">
+            <!-- 75% Edge-to-Edge Color Slabs -->
+            <div class="w-full h-[74%] grid grid-cols-5 gap-0">
+              <div class="h-full w-full swatch-val-0" style="background:#121734;"></div>
+              <div class="h-full w-full swatch-val-1" style="background:#2A1F42;"></div>
+              <div class="h-full w-full swatch-val-2" style="background:#943440;"></div>
+              <div class="h-full w-full swatch-val-3" style="background:#E06038;"></div>
+              <div class="h-full w-full swatch-val-4" style="background:#FC9858;"></div>
+            </div>
+
+            <!-- Stark Bottom Bar -->
+            <div class="p-5 flex items-center justify-between bg-black text-white">
+              <div>
+                <h4 class="text-base font-bold tracking-tight" id="monolith-city">BUCHAREST</h4>
+                <div class="text-[10px] font-mono text-white/50" id="monolith-sub">44.4°N · 16:51 · NOV 14</div>
+              </div>
+              <div class="text-right">
+                <span class="text-[11px] font-mono font-medium text-white/90">skypalette.app</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Social Media / Export Buttons -->
+        <div class="space-y-2 pt-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="copyShareLink()" class="py-2.5 px-4 rounded-full bg-black text-white hover:bg-neutral-800 text-xs font-medium transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-[0.98]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy Link</span>
+            </button>
+            <button onclick="downloadStravaCard()" class="py-2.5 px-4 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black text-xs font-medium border border-black/10 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Save Card</span>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-center gap-2 pt-2 border-t border-black/5">
+            <span class="text-[11px] text-neutral-400 mr-1">Share to:</span>
+            <button onclick="shareTo('instagram')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Instagram Stories">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            </button>
+            <button onclick="shareTo('x')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="X (Twitter)">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </button>
+            <button onclick="shareTo('threads')" class="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-black transition-colors" title="Threads">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-9 9c4.97 0 9-4.03 9-9"/></svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- SCREEN 6: PROJECT INFO, TECH, LICENSES & PRIVACY MODAL   -->
+  <!-- ======================================================== -->
+  <div id="info-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 opacity-0 pointer-events-none transition-[opacity] duration-200">
+    <div onclick="closeInfoModal()" class="absolute inset-0 modal-backdrop"></div>
+    <div class="modal-card relative w-full max-w-xl bg-white text-neutral-900 rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 transform scale-95 transition-[transform,opacity] duration-200 max-h-[92vh] flex flex-col">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-black/5 shrink-0 bg-white">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-mono text-xs font-bold shadow-xs">
+            SP
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-black tracking-tight flex items-center gap-2">
+              Sky Palette
+              <span class="px-2 py-0.5 rounded-full bg-neutral-100 border border-black/10 text-[10px] font-mono font-medium text-neutral-600">v1.2.0</span>
+            </h3>
+            <p class="text-xs text-neutral-500 font-sans">Physical sky color engine & solar architecture</p>
+          </div>
+        </div>
+        <button onclick="closeInfoModal()" class="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-black flex items-center justify-center transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Scrollable Content -->
+      <div class="px-6 py-5 overflow-y-auto space-y-6 text-xs text-neutral-700 leading-relaxed">
+        
+        <!-- 1. Description & Action Links -->
+        <div class="space-y-3">
+          <p class="text-sm text-neutral-900 font-medium leading-relaxed">
+            Sky Palette calculates natural 5-swatch color palettes (Zenith, Mid-Sky, Horizon, Sun Glow, Cloud Tint) from physically-based solar scattering models, real-time meteorological cloud dynamics, and moderated crowdsourced sky photography.
+          </p>
+          
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <!-- GitHub Repo -->
+            <a href="https://github.com/sky-palette/sky-palette" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-black hover:bg-neutral-800 text-white font-medium transition-colors shadow-xs">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              <span>GitHub Repository</span>
+            </a>
+
+            <!-- Report a Bug -->
+            <a href="https://github.com/sky-palette/sky-palette/issues/new?template=bug_report.md" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-medium transition-colors border border-black/10">
+              <svg class="w-3.5 h-3.5 text-neutral-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="8" height="14" x="8" y="6" rx="4"/>
+                <path d="m19 7-3 2"/>
+                <path d="m5 7 3 2"/>
+                <path d="m19 19-3-2"/>
+                <path d="m5 19 3-2"/>
+                <path d="M20 13h-4"/>
+                <path d="M4 13h4"/>
+                <path d="m10 4 1 2"/>
+                <path d="m14 4-1 2"/>
+              </svg>
+              <span>Report a Bug</span>
+            </a>
+
+            <!-- Release Notes Anchor -->
+            <a href="#release-notes-section" onclick="scrollToInfoSection('release-notes-section')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-medium transition-colors border border-black/10">
+              <svg class="w-3.5 h-3.5 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span>Release Notes</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- 2. Technologies Used -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Core Technologies</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Preetham & Hosek-Wilkie</div>
+              <div class="text-[11px] text-neutral-500">Physical atmospheric scattering equations modeling Rayleigh (air) and Mie (aerosol) sunlight absorption.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">SunCalc Solar Physics</div>
+              <div class="text-[11px] text-neutral-500">Sub-degree astronomical solar elevation, azimuth, and golden/twilight phase calculation by latitude and longitude.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Open-Meteo Solar API</div>
+              <div class="text-[11px] text-neutral-500">Real-time stratified cloud layering (low, mid, high) and diffuse radiation without API keys.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Vanilla Modern Web</div>
+              <div class="text-[11px] text-neutral-500">Fast zero-runtime architecture with HTML5 Canvas, CSS Grid, and Tailwind CSS. Zero bloat.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Cloudflare D1 & R2 Storage</div>
+              <div class="text-[11px] text-neutral-500">Serverless SQLite at the edge and zero-egress photo object storage for community contributions.</div>
+            </div>
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1">
+              <div class="font-medium text-black">Cloudflare Edge & Analytics</div>
+              <div class="text-[11px] text-neutral-500">Global edge caching, TLS security, and non-invasive privacy-preserving web telemetry.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Usage Monitoring & Cloudflare Telemetry -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Usage Monitoring & Telemetry</h4>
+          <div class="p-3.5 rounded-2xl bg-neutral-50 border border-black/5 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="font-medium text-black text-xs">Cloudflare Web Analytics (Privacy-First)</span>
+            </div>
+            <p class="text-[11px] text-neutral-600 leading-relaxed">
+              To monitor application health, traffic volume, and performance (such as Largest Contentful Paint and interaction responsiveness), Sky Palette utilizes <strong>Cloudflare Web Analytics</strong>.
+            </p>
+            <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+              <li><strong>Zero Cookies:</strong> No cookies or client-side storage are ever set or read for telemetry.</li>
+              <li><strong>Zero Fingerprinting:</strong> No device fingerprints, canvas hashes, or cross-site tracking IDs.</li>
+              <li><strong>Zero Personal Data:</strong> IP addresses are never logged or stored. Aggregate metrics only.</li>
+              <li><strong>GDPR & ePrivacy Compliant:</strong> Does not require consent banners because no personal data is processed.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 4. Privacy & Cookies Policy -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Privacy & Cookies</h4>
+            <span class="text-[11px] font-mono text-emerald-600 font-medium">100% Cookie-Free</span>
+          </div>
+          <div class="space-y-2 text-[11px] text-neutral-600 leading-relaxed">
+            <p>
+              Sky Palette is built on strict data minimalism:
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-neutral-800">
+              <div class="p-2.5 rounded-xl bg-white border border-black/10">
+                <strong>No User Accounts:</strong> Anyone can explore palettes and submit photos anonymously.
+              </div>
+              <div class="p-2.5 rounded-xl bg-white border border-black/10">
+                <strong>Zero Cookies:</strong> No database or session cookies. Cloudflare D1 and Workers operate via edge bindings without tracking.
+              </div>
+            </div>
+            <p class="pt-1">
+              Read our complete legal documents:
+              <a href="/privacy-policy" onclick="toggleLegalDoc('privacy'); return false;" class="text-black font-medium underline underline-offset-2 ml-1 cursor-pointer">Privacy Policy</a>
+              <span class="mx-1">·</span>
+              <a href="/terms-of-service" onclick="toggleLegalDoc('terms'); return false;" class="text-black font-medium underline underline-offset-2 cursor-pointer">Terms of Service</a>
+            </p>
+
+            <!-- Inline Privacy Policy Drawer -->
+            <div id="legal-doc-privacy" class="hidden p-3.5 rounded-2xl bg-neutral-50 border border-black/10 space-y-2 text-[11px] text-neutral-700">
+              <div class="font-semibold text-black text-xs">Sky Palette Privacy Policy (Summary)</div>
+              <p>1. <strong>Information We Do Not Collect:</strong> We do not ask for or collect names, email addresses, passwords, phone numbers, or payment data. We do not use cookies, local storage tracking keys, or third-party advertising pixels.</p>
+              <p>2. <strong>Crowdsourced Sky Photos:</strong> When you submit a sky image, EXIF metadata (timestamp and approximate location) is extracted locally in your browser to evaluate solar physics alignment. Photos are stored anonymously and released under CC0 (Public Domain).</p>
+              <p>3. <strong>Telemetry & Infrastructure:</strong> Usage is monitored exclusively through privacy-preserving aggregate telemetry via Cloudflare Web Analytics without tracking individual users or collecting IP addresses.</p>
+            </div>
+
+            <!-- Inline Terms of Service Drawer -->
+            <div id="legal-doc-terms" class="hidden p-3.5 rounded-2xl bg-neutral-50 border border-black/10 space-y-2 text-[11px] text-neutral-700">
+              <div class="font-semibold text-black text-xs">Sky Palette Terms of Service (Summary)</div>
+              <p>1. <strong>Open Source & Free Use:</strong> Sky Palette is free and open-source software provided under the MIT License. You are free to use generated color palettes for personal, commercial, and artistic purposes.</p>
+              <p>2. <strong>Contribution Terms:</strong> By sharing a photo through Sky Palette, you confirm you are the copyright holder and agree to irrevocably dedicate your contribution to the public domain under CC0 1.0 Universal.</p>
+              <p>3. <strong>Disclaimer:</strong> Solar physics calculations and color values are provided "as is" without warranties of any kind.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Licenses & Attribution -->
+        <div class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Licenses & Credits</h4>
+          <div class="space-y-2 text-[11px] text-neutral-600">
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Sky Palette Web Codebase</div>
+                <div class="text-neutral-500">Open-source software release.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">MIT</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Community Contributed Sky Photos</div>
+                <div class="text-neutral-500">All submitted and verified sky photography is dedicated to the public domain.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC0 1.0</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Open-Meteo Meteorological Data</div>
+                <div class="text-neutral-500">Weather data provided under Creative Commons Attribution 4.0.</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC BY 4.0</span>
+            </div>
+
+            <div class="flex items-start justify-between p-2.5 rounded-xl bg-neutral-50 border border-black/5">
+              <div>
+                <div class="font-medium text-black">Design & Unslop Methodology</div>
+                <div class="text-neutral-500">Unslopped with methodology by Damir Sokolovsky (@heydamir).</div>
+              </div>
+              <span class="px-2 py-0.5 rounded-md bg-white border border-black/10 text-[10px] font-mono font-semibold text-black">CC BY 4.0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Release Notes Section -->
+        <div id="release-notes-section" class="space-y-2.5 pt-2 border-t border-black/5">
+          <h4 class="text-xs font-semibold text-black uppercase tracking-wider font-mono">Release Notes</h4>
+          <div class="space-y-3 font-mono text-[11px]">
+            
+            <!-- v1.2.0 -->
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1.5 font-sans">
+              <div class="flex items-center justify-between font-mono text-xs">
+                <span class="font-bold text-black">v1.2.0 · Jog-Dial Scrubber & Unboxed Polish</span>
+                <span class="text-neutral-400 text-[10px]">November 2026</span>
+              </div>
+              <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+                <li>Added unified tactile horizontal ruler jog-dial scrubber on Home and Gallery Day Details.</li>
+                <li>Perceptual luminance contrast engine ($Y = 0.299R + 0.587G + 0.114B$) for smooth analog text and needle illumination.</li>
+                <li>Responsive mobile top bar in gallery preventing button collisions on narrow viewports.</li>
+                <li>Unboxed clean white modal canvas for crowdsourced photo submissions with direct adjacent color previews.</li>
+                <li>Added project info, licenses, privacy disclosure, and non-invasive usage monitoring details.</li>
+              </ul>
+            </div>
+
+            <!-- v1.1.0 -->
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1.5 font-sans">
+              <div class="flex items-center justify-between font-mono text-xs">
+                <span class="font-bold text-black">v1.1.0 · Atmospheric Telemetry Sharing</span>
+                <span class="text-neutral-400 text-[10px]">November 2026</span>
+              </div>
+              <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+                <li>Strava-style atmospheric telemetry cards (Studio, Dark, Horizon, Minimal).</li>
+                <li>Client-side high-resolution PNG export with single-tap clipboard copy and social sharing.</li>
+                <li>Full-screen zero-scroll 15-day sunset mosaic gallery.</li>
+              </ul>
+            </div>
+
+            <!-- v1.0.0 -->
+            <div class="p-3 rounded-2xl bg-neutral-50 border border-black/5 space-y-1.5 font-sans">
+              <div class="flex items-center justify-between font-mono text-xs">
+                <span class="font-bold text-black">v1.0.0 · Initial Release</span>
+                <span class="text-neutral-400 text-[10px]">November 2026</span>
+              </div>
+              <ul class="text-[11px] text-neutral-600 space-y-1 list-disc list-inside">
+                <li>Preetham skylight physics simulation for Bucharest HQ.</li>
+                <li>5-swatch palette extraction engine (Zenith, Mid-Sky, Horizon, Sun Glow, Cloud Tint).</li>
+                <li>Zero-account anonymous sky photo contribution flow.</li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3.5 bg-neutral-50 border-t border-black/5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        <div class="text-[11px] text-neutral-500 font-mono">
+          Bucharest HQ · 44.4°N, 26.1°E · MIT & CC0
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="https://github.com/sky-palette/sky-palette/issues/new?template=bug_report.md" target="_blank" rel="noopener noreferrer" class="text-neutral-600 hover:text-black font-medium transition-colors text-[11px] flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-neutral-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="8" height="14" x="8" y="6" rx="4"/>
+              <path d="m19 7-3 2"/>
+              <path d="m5 7 3 2"/>
+              <path d="m19 19-3-2"/>
+              <path d="m5 19 3-2"/>
+              <path d="M20 13h-4"/>
+              <path d="M4 13h4"/>
+              <path d="m10 4 1 2"/>
+              <path d="m14 4-1 2"/>
+            </svg>
+            <span>Report Bug</span>
+          </a>
+          <button onclick="closeInfoModal()" class="px-4 py-1.5 rounded-full bg-black hover:bg-neutral-800 text-white font-medium text-xs transition-colors cursor-pointer">
+            Close
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- JAVASCRIPT APPLICATION LOGIC                             -->
+  <!-- ======================================================== -->
+  <script>
+    // ----------------------------------------------------
+    // 1. BUCHAREST HQ & CITIES DATASET
+    // ----------------------------------------------------
+    let currentCity = 'Bucharest, Romania';
+    let hasChosenLocation = false;
+    let galleryDaysCount = 15;
+    let gallerySolarPhase = 'Sunset';
+
+    const CITIES_DATA = {
+      'Bucharest, Romania': {
+        name: 'Bucharest',
+        country: 'Romania',
+        coords: '44.4268° N, 26.1025° E',
+        badge: 'Bucharest · HQ · 44.4°N',
+        sunsetTime: '16:51',
+        elev: '+0.8°',
+        spots: ['Herastrau Park', 'Calea Victoriei', 'Dambovita Quay', 'Palace of Parliament'],
+        days: [
+          { date: 'Nov 14', time: '16:51', badge: '📷 5', colors: ['#121734', '#2A1F42', '#943440', '#E06038', '#FC9858'] },
+          { date: 'Nov 13', time: '16:52', badge: '📷 3', colors: ['#151C3B', '#34264E', '#8E384D', '#D96542', '#F7A76B'] },
+          { date: 'Nov 12', time: '16:53', badge: null,   colors: ['#182348', '#3A2E58', '#7A3A58', '#C85A42', '#FAA548'] },
+          { date: 'Nov 11', time: '16:54', badge: '📷 7', colors: ['#101530', '#2B1E40', '#9C3642', '#E25E33', '#F99852'] },
+          { date: 'Nov 10', time: '16:56', badge: null,   colors: ['#131B38', '#36284C', '#8A3750', '#D46340', '#F5A264'] },
+          { date: 'Nov 9',  time: '16:57', badge: '📷 2', colors: ['#162042', '#3D2F56', '#7E3C56', '#C65C45', '#F8AC5E'] },
+          { date: 'Nov 8',  time: '16:59', badge: '📷 4', colors: ['#111633', '#2E2244', '#963946', '#DE6139', '#F99F57'] },
+          { date: 'Nov 7',  time: '17:00', badge: null,   colors: ['#141D3B', '#382A4E', '#863652', '#D06543', '#F4A468'] },
+          { date: 'Nov 6',  time: '17:02', badge: '📷 1', colors: ['#172246', '#3E3058', '#783A58', '#C25844', '#F7AA5C'] },
+          { date: 'Nov 5',  time: '17:03', badge: '📷 6', colors: ['#0F142E', '#291C3E', '#9E3740', '#E55F30', '#FA974E'] },
+          { date: 'Nov 4',  time: '17:05', badge: null,   colors: ['#121A36', '#332549', '#8C384E', '#D6643E', '#F6A363'] },
+          { date: 'Nov 3',  time: '17:06', badge: '📷 3', colors: ['#152040', '#3B2D54', '#7F3B55', '#C85C43', '#F8AD5F'] },
+          { date: 'Nov 2',  time: '17:08', badge: null,   colors: ['#111732', '#2F2143', '#933845', '#DC6037', '#F99E55'] },
+          { date: 'Nov 1',  time: '17:09', badge: '📷 8', colors: ['#141D3A', '#37294D', '#843550', '#CE6641', '#F3A667'] },
+          { date: 'Oct 31', time: '17:11', badge: '📷 4', colors: ['#182348', '#3E3058', '#763857', '#BF5742', '#F6A85B'] }
+        ]
+      },
+      'Tokyo, Japan': {
+        name: 'Tokyo',
+        country: 'Japan',
+        coords: '35.6762° N, 139.6503° E',
+        badge: 'Tokyo · 35.6°N',
+        sunsetTime: '16:35',
+        elev: '+1.1°',
+        spots: ['Shinjuku Gyoen', 'Shibuya Crossing', 'Roppongi Hills', 'Sumida River'],
+        days: [
+          { date: 'Nov 14', time: '16:35', badge: '📷 6', colors: ['#141D3B', '#3E2856', '#9C4258', '#F5784C', '#FFB770'] },
+          { date: 'Nov 13', time: '16:36', badge: '📷 4', colors: ['#172042', '#442C60', '#8E3F58', '#EC6E46', '#F8AC6A'] },
+          { date: 'Nov 12', time: '16:37', badge: null,   colors: ['#1B264E', '#4B336B', '#7A3855', '#E06240', '#F29F5F'] },
+          { date: 'Nov 11', time: '16:38', badge: '📷 9', colors: ['#121A35', '#3A2552', '#A2445A', '#F87C4E', '#FFBC76'] },
+          { date: 'Nov 10', time: '16:39', badge: '📷 3', colors: ['#151E3D', '#412A5C', '#924059', '#EE7148', '#FAAF6D'] },
+          { date: 'Nov 9',  time: '16:40', badge: null,   colors: ['#192448', '#483066', '#803B57', '#E46642', '#F4A362'] },
+          { date: 'Nov 8',  time: '16:41', badge: '📷 5', colors: ['#131B37', '#3D2755', '#9A4157', '#F3764B', '#FFB66F'] },
+          { date: 'Nov 7',  time: '16:42', badge: null,   colors: ['#162143', '#432D62', '#8C3E57', '#E96C44', '#F7AA68'] },
+          { date: 'Nov 6',  time: '16:43', badge: '📷 2', colors: ['#1A264D', '#4B336B', '#7C3956', '#DF6341', '#F1A060'] },
+          { date: 'Nov 5',  time: '16:44', badge: '📷 7', colors: ['#111934', '#382450', '#A04359', '#F77A4D', '#FFBB74'] },
+          { date: 'Nov 4',  time: '16:45', badge: null,   colors: ['#141E3C', '#40295A', '#913F58', '#ED6F47', '#F9AD6B'] },
+          { date: 'Nov 3',  time: '16:47', badge: '📷 4', colors: ['#182347', '#472F65', '#823C56', '#E36543', '#F3A263'] },
+          { date: 'Nov 2',  time: '16:48', badge: null,   colors: ['#121B36', '#3C2654', '#984056', '#F1744A', '#FFB46E'] },
+          { date: 'Nov 1',  time: '16:49', badge: '📷 8', colors: ['#152041', '#422C60', '#8A3D56', '#E76A43', '#F6A867'] },
+          { date: 'Oct 31', time: '16:50', badge: '📷 3', colors: ['#19254B', '#49326A', '#7E3A55', '#DD6140', '#EFA05F'] }
+        ]
+      },
+      'Reykjavik, Iceland': {
+        name: 'Reykjavik',
+        country: 'Iceland',
+        coords: '64.1466° N, 21.9426° W',
+        badge: 'Reykjavik · 64.1°N',
+        sunsetTime: '16:10',
+        elev: '+0.2°',
+        spots: ['Harpa Waterfront', 'Tjornin Pond', 'Sun Voyager', 'Perlan Dome'],
+        days: [
+          { date: 'Nov 14', time: '16:10', badge: '📷 8', colors: ['#0E1428', '#261C40', '#633550', '#A84F45', '#DDA27A'] },
+          { date: 'Nov 13', time: '16:13', badge: '📷 5', colors: ['#101730', '#2B2048', '#5E314C', '#A04940', '#D69B72'] },
+          { date: 'Nov 12', time: '16:16', badge: null,   colors: ['#131B38', '#312550', '#562C47', '#97433B', '#CF936A'] },
+          { date: 'Nov 11', time: '16:19', badge: '📷 9', colors: ['#0D1226', '#241A3D', '#663752', '#AC5247', '#E0A67E'] },
+          { date: 'Nov 10', time: '16:22', badge: '📷 4', colors: ['#0F152E', '#281E44', '#60334E', '#A34C42', '#D99E75'] },
+          { date: 'Nov 9',  time: '16:25', badge: null,   colors: ['#121935', '#2E224C', '#582E49', '#9A453D', '#D1956C'] },
+          { date: 'Nov 8',  time: '16:28', badge: '📷 7', colors: ['#0E142B', '#271D42', '#623550', '#A64F44', '#DC9F78'] },
+          { date: 'Nov 7',  time: '16:32', badge: null,   colors: ['#111732', '#2B2047', '#5C314B', '#9E493F', '#D49770'] },
+          { date: 'Nov 6',  time: '16:35', badge: '📷 3', colors: ['#141C3A', '#322552', '#542B46', '#95423A', '#CC9067'] },
+          { date: 'Nov 5',  time: '16:38', badge: '📷 6', colors: ['#0C1124', '#22183A', '#683955', '#B05549', '#E4AA82'] },
+          { date: 'Nov 4',  time: '16:41', badge: null,   colors: ['#0E152C', '#261D42', '#61344F', '#A54D43', '#DBA077'] },
+          { date: 'Nov 3',  time: '16:45', badge: '📷 5', colors: ['#111833', '#2B2149', '#592E48', '#9B453D', '#D2966E'] },
+          { date: 'Nov 2',  time: '16:48', badge: null,   colors: ['#0D1329', '#251C3F', '#643651', '#A85045', '#DE9F7A'] },
+          { date: 'Nov 1',  time: '16:51', badge: '📷 8', colors: ['#101630', '#291F45', '#5E314C', '#9F483F', '#D59671'] },
+          { date: 'Oct 31', time: '16:55', badge: '📷 4', colors: ['#131B37', '#30244F', '#572C47', '#974138', '#CD8E66'] }
+        ]
+      },
+      'Paris, France': {
+        name: 'Paris',
+        country: 'France',
+        coords: '48.8566° N, 2.3522° E',
+        badge: 'Paris · 48.8°N',
+        sunsetTime: '17:15',
+        elev: '+1.0°',
+        spots: ['Pont Alexandre III', 'Montmartre', 'Seine River', 'Jardin des Tuileries'],
+        days: [
+          { date: 'Nov 14', time: '17:15', badge: '📷 7', colors: ['#121A3B', '#342654', '#8E384D', '#E25E33', '#F99852'] },
+          { date: 'Nov 13', time: '17:16', badge: '📷 3', colors: ['#151F42', '#3C2B60', '#843750', '#D85730', '#F38E4B'] },
+          { date: 'Nov 12', time: '17:18', badge: null,   colors: ['#182349', '#422F6A', '#7A3552', '#CD4E2D', '#EC8445'] },
+          { date: 'Nov 11', time: '17:19', badge: '📷 5', colors: ['#111836', '#31234F', '#923A4E', '#E66336', '#FC9E56'] },
+          { date: 'Nov 10', time: '17:21', badge: '📷 2', colors: ['#141D3E', '#382859', '#883850', '#DD5C33', '#F6944E'] },
+          { date: 'Nov 9',  time: '17:22', badge: null,   colors: ['#172145', '#3E2E64', '#7D3653', '#D15230', '#EF8A48'] },
+          { date: 'Nov 8',  time: '17:24', badge: '📷 9', colors: ['#13193A', '#332553', '#90394F', '#E46034', '#FA9B54'] },
+          { date: 'Nov 7',  time: '17:25', badge: null,   colors: ['#161F41', '#3A2A5E', '#853751', '#D95831', '#F4904C'] },
+          { date: 'Nov 6',  time: '17:27', badge: '📷 4', colors: ['#192348', '#403068', '#7B3553', '#CE4F2E', '#ED8646'] },
+          { date: 'Nov 5',  time: '17:28', badge: '📷 6', colors: ['#101734', '#2F214B', '#953B50', '#E96537', '#FF9F58'] },
+          { date: 'Nov 4',  time: '17:30', badge: null,   colors: ['#131B3B', '#362657', '#8B3851', '#DF5E34', '#F79650'] },
+          { date: 'Nov 3',  time: '17:31', badge: '📷 3', colors: ['#162043', '#3C2C61', '#803653', '#D35431', '#F08C4A'] },
+          { date: 'Nov 2',  time: '17:33', badge: null,   colors: ['#121938', '#322452', '#913A4F', '#E56135', '#FB9C55'] },
+          { date: 'Nov 1',  time: '17:35', badge: '📷 8', colors: ['#151E40', '#39295C', '#873751', '#DA5932', '#F5924D'] },
+          { date: 'Oct 31', time: '17:36', badge: '📷 5', colors: ['#182246', '#3F2F66', '#7C3553', '#CF502F', '#EE8847'] }
+        ]
+      },
+      'Buenos Aires, Argentina': {
+        name: 'Buenos Aires',
+        country: 'Argentina',
+        coords: '34.6037° S, 58.3816° W',
+        badge: 'Buenos Aires · 34.6°S',
+        sunsetTime: '19:42',
+        elev: '+1.4°',
+        spots: ['Puerto Madero', 'Palermo Soho', 'Recoleta Sky', 'San Telmo'],
+        days: [
+          { date: 'Nov 12', time: '19:42', badge: '📷 4', colors: ['#1A3070', '#4A3080', '#E87040', '#FFB347', '#F2C4CE'] },
+          { date: 'Nov 11', time: '19:41', badge: '📷 2', colors: ['#162058', '#58327E', '#E95A64', '#FFA35C', '#F7D2C4'] },
+          { date: 'Nov 10', time: '19:40', badge: null,   colors: ['#213568', '#684C7A', '#D97368', '#F5BA6D', '#E8C9D8'] },
+          { date: 'Nov 9',  time: '19:39', badge: '📷 6', colors: ['#11234D', '#3A3472', '#EB5E28', '#F7923B', '#F5D6BA'] },
+          { date: 'Nov 8',  time: '19:38', badge: null,   colors: ['#0C1E45', '#48316B', '#D45D55', '#EFA259', '#D6BFD4'] },
+          { date: 'Nov 7',  time: '19:37', badge: '📷 8', colors: ['#2A3065', '#553E75', '#E26D5C', '#FF9F68', '#F9D8C8'] },
+          { date: 'Nov 6',  time: '19:36', badge: null,   colors: ['#182B5A', '#604582', '#DE6860', '#F7B066', '#EBC4D0'] },
+          { date: 'Nov 5',  time: '19:35', badge: '📷 3', colors: ['#142550', '#423676', '#E8623A', '#F99848', '#F6D9C0'] },
+          { date: 'Nov 4',  time: '19:34', badge: '📷 1', colors: ['#1F2F60', '#503570', '#D65F58', '#F1A65E', '#D9C1D6'] },
+          { date: 'Nov 3',  time: '19:33', badge: null,   colors: ['#1C3368', '#5C407C', '#E47160', '#FFA46C', '#FBDBCB'] },
+          { date: 'Nov 2',  time: '19:32', badge: '📷 5', colors: ['#162855', '#634885', '#DF6B64', '#F8B369', '#ECC6D2'] },
+          { date: 'Nov 1',  time: '19:31', badge: '📷 7', colors: ['#12224D', '#46387A', '#E9653D', '#FA9B4B', '#F7DBC3'] },
+          { date: 'Oct 31', time: '19:30', badge: null,   colors: ['#223263', '#533873', '#D8625B', '#F3A961', '#DBC3D8'] },
+          { date: 'Oct 30', time: '19:29', badge: '📷 2', colors: ['#1E356A', '#5E427E', '#E67463', '#FFA66E', '#FCDCCE'] },
+          { date: 'Oct 29', time: '19:28', badge: '📷 9', colors: ['#182A57', '#654B87', '#E16D66', '#F9B56B', '#EDC8D4'] }
+        ]
+      }
+    };
+
+    // ----------------------------------------------------
+    // 2. TIME-STOPS COLOR PHYSICS TABLE (Bucharest HQ)
+    // ----------------------------------------------------
+    const timeStops = {
+      5.0:  { zenith: '#070913', midsky: '#0a0d1c', horizon: '#12172a', sunglow: '#1c223c', cloudtint: '#0d101e' },
+      6.0:  { zenith: '#0a0f24', midsky: '#141434', horizon: '#2c183a', sunglow: '#461c36', cloudtint: '#1e122b' },
+      7.2:  { zenith: '#121838', midsky: '#3b2854', horizon: '#8c3b52', sunglow: '#e86444', cloudtint: '#fca25e' },
+      8.5:  { zenith: '#162c5c', midsky: '#264a82', horizon: '#4f7cb5', sunglow: '#f5c478', cloudtint: '#fcedd0' },
+      12.0: { zenith: '#1b4b8a', midsky: '#2d67aa', horizon: '#629cd8', sunglow: '#fff4cc', cloudtint: '#dcf0fb' },
+      15.1: { zenith: '#193f77', midsky: '#285894', horizon: '#5788bf', sunglow: '#fce2ad', cloudtint: '#f3dec2' },
+      16.2: { zenith: '#182348', midsky: '#3a2e58', horizon: '#7a3a58', sunglow: '#faa548', cloudtint: '#f3c4ab' },
+      16.85:{ zenith: '#121734', midsky: '#2a1f42', horizon: '#943440', sunglow: '#e06038', cloudtint: '#fc9858' },
+      17.4: { zenith: '#0e1226', midsky: '#1c1836', horizon: '#4a2038', sunglow: '#782c3c', cloudtint: '#401a2e' },
+      18.5: { zenith: '#090c1a', midsky: '#11152a', horizon: '#1f1b38', sunglow: '#321e3c', cloudtint: '#1c1428' },
+      21.0: { zenith: '#070913', midsky: '#0a0d1c', horizon: '#12172a', sunglow: '#1c223c', cloudtint: '#0d101e' }
+    };
+
+    function hexToRgb(hex) {
+      const clean = hex.replace('#', '');
+      return {
+        r: parseInt(clean.substring(0, 2), 16),
+        g: parseInt(clean.substring(2, 4), 16),
+        b: parseInt(clean.substring(4, 6), 16),
+      };
+    }
+
+    function rgbToHex(r, g, b) {
+      return '#' + [r, g, b].map(x => {
+        const h = Math.round(Math.max(0, Math.min(255, x))).toString(16);
+        return h.length === 1 ? '0' + h : h;
+      }).join('');
+    }
+
+    function interpolateColor(c1, c2, factor) {
+      const rgb1 = hexToRgb(c1);
+      const rgb2 = hexToRgb(c2);
+      return rgbToHex(
+        rgb1.r + (rgb2.r - rgb1.r) * factor,
+        rgb1.g + (rgb2.g - rgb1.g) * factor,
+        rgb1.b + (rgb2.b - rgb1.b) * factor
+      );
+    }
+
+    function getPaletteAtTime(timeVal) {
+      const keys = Object.keys(timeStops).map(Number).sort((a, b) => a - b);
+      if (timeVal <= keys[0]) return { ...timeStops[keys[0]] };
+      if (timeVal >= keys[keys.length - 1]) return { ...timeStops[keys[keys.length - 1]] };
+      
+      let i = 0;
+      while (i < keys.length - 1 && keys[i + 1] < timeVal) i++;
+      const t0 = keys[i];
+      const t1 = keys[i + 1];
+      const factor = (timeVal - t0) / (t1 - t0);
+      
+      const p0 = timeStops[t0];
+      const p1 = timeStops[t1];
+      
+      return {
+        zenith: interpolateColor(p0.zenith, p1.zenith, factor),
+        midsky: interpolateColor(p0.midsky, p1.midsky, factor),
+        horizon: interpolateColor(p0.horizon, p1.horizon, factor),
+        sunglow: interpolateColor(p0.sunglow, p1.sunglow, factor),
+        cloudtint: interpolateColor(p0.cloudtint, p1.cloudtint, factor),
+      };
+    }
+
+    function formatTime(val) {
+      const hours = Math.floor(val);
+      const minutes = Math.round((val - hours) * 60);
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    function getSkyPhase(val) {
+      if (val < 6.5) return { name: 'Dawn Transition', elev: '-8.0°' };
+      if (val < 7.5) return { name: 'Sunrise Peak', elev: '+1.5°' };
+      if (val < 11.0) return { name: 'Morning Light', elev: '+14.2°' };
+      if (val < 14.0) return { name: 'Midday Zenith', elev: '+28.4°' };
+      if (val < 16.0) return { name: 'Afternoon Daylight', elev: '+21.4°' };
+      if (val < 16.7) return { name: 'Golden Hour', elev: '+4.8°' };
+      if (val < 17.2) return { name: 'Sunset Peak', elev: '+0.8°' };
+      if (val < 18.0) return { name: 'Civil Twilight', elev: '-4.2°' };
+      return { name: 'Night Sky', elev: '-18.0°' };
+    }
+
+    // ----------------------------------------------------
+    // 3. HOME LIVE SKY SIMULATOR & STEP SCRUBBER WIDGET
+    // ----------------------------------------------------
+    let currentBucharestHour = 15.1; // ~15:06
+
+    function updateBucharestHomeSky(hourVal) {
+      currentBucharestHour = hourVal;
+      const palette = getPaletteAtTime(hourVal);
+      const timeStr = formatTime(hourVal);
+
+      // Smoothly update Home screen dynamic sky
+      const homeScreen = document.getElementById('screen-home');
+      if (homeScreen) {
+        homeScreen.style.background = `
+          radial-gradient(ellipse 90% 40% at 50% 70%, ${palette.sunglow} 0%, transparent 65%),
+          linear-gradient(180deg, ${palette.zenith} 0%, ${palette.midsky} 40%, ${palette.horizon} 72%, ${palette.sunglow} 100%)
+        `;
+      }
+
+      // Update time only on header
+      const clockEl = document.getElementById('bucharest-clock');
+      if (clockEl) clockEl.innerText = timeStr;
+
+      // Update home bottom text contrast
+      if (typeof getSkyContrastColor === 'function' && typeof updateHomeBottomTextColor === 'function') {
+        const contrast = getSkyContrastColor(hourVal);
+        updateHomeBottomTextColor(contrast);
+      }
+    }
+
+    // ----------------------------------------------------
+    // 4. SCREEN NAVIGATION
+    // ----------------------------------------------------
+    let currentScreen = 'screen-home';
+
+    function navigateTo(screenId) {
+      document.querySelectorAll('.app-screen').forEach(el => {
+        el.classList.remove('active');
+      });
+
+      const target = document.getElementById(screenId);
+      if (target) {
+        target.classList.add('active');
+        currentScreen = screenId;
+      }
+
+      // Update bottom dock active state
+      const btnHome = document.getElementById('nav-btn-home');
+      const btnGallery = document.getElementById('nav-btn-gallery');
+
+      if (btnHome && btnGallery) {
+        if (screenId === 'screen-home') {
+          btnHome.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors bg-white text-black font-semibold shadow-md";
+          btnGallery.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors text-white/70 hover:text-white hover:bg-white/10";
+        } else if (screenId === 'screen-gallery' || screenId === 'screen-detail') {
+          btnHome.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors text-white/70 hover:text-white hover:bg-white/10";
+          btnGallery.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors bg-white text-black font-semibold shadow-md";
+        } else {
+          btnHome.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors text-white/70 hover:text-white hover:bg-white/10";
+          btnGallery.className = "px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-colors text-white/70 hover:text-white hover:bg-white/10";
+        }
+      }
+    }
+
+    function handleGalleryNav() {
+      if (!hasChosenLocation) {
+        openGallerySearchModal();
+      } else {
+        navigateTo('screen-gallery');
+      }
+    }
+
+    function openGallerySearchModal() {
+      const m = document.getElementById('gallery-search-modal');
+      if (!m) return;
+      m.classList.remove('opacity-0', 'pointer-events-none');
+      const card = m.querySelector('.modal-card');
+      if (card) card.classList.remove('scale-95');
+    }
+
+    function closeGallerySearchModal() {
+      const m = document.getElementById('gallery-search-modal');
+      if (!m) return;
+      m.classList.add('opacity-0', 'pointer-events-none');
+      const card = m.querySelector('.modal-card');
+      if (card) card.classList.add('scale-95');
+    }
+
+    function confirmLocation(cityName) {
+      hasChosenLocation = true;
+      closeGallerySearchModal();
+      selectCity(cityName);
+    }
+
+    function selectCity(cityName) {
+      hasChosenLocation = true;
+      currentCity = cityName;
+
+      if (!CITIES_DATA[cityName]) {
+        CITIES_DATA[cityName] = {
+          name: cityName,
+          country: cityName.includes('ZIP') ? 'Postal Zone' : 'Region',
+          coords: '44.4° N, 26.1° E',
+          badge: `${cityName} · Local Sky`,
+          sunsetTime: '17:05',
+          elev: '+1.0°',
+          spots: ['Observation Deck', 'Panoramic Vista', 'Town Square'],
+          days: CITIES_DATA['Bucharest, Romania'].days
+        };
+      }
+
+      const cityData = CITIES_DATA[cityName];
+
+      // Update Gallery Badge
+      const badge = document.getElementById('gallery-city-badge');
+      if (badge) badge.innerText = cityData.badge;
+
+      // Update Submit Modal Location
+      const subLoc = document.getElementById('submit-location-input');
+      if (subLoc) subLoc.value = cityName;
+
+      // Update Share Card Fields across all variants
+      updateShareCardData(cityData);
+
+      // Re-render gallery cards for this city
+      renderGalleryCards();
+      navigateTo('screen-gallery');
+      showToast(`Loaded ${cityData.name}`);
+    }
+
+    function openDayDetail(dayIndex) {
+      const cityData = CITIES_DATA[currentCity] || CITIES_DATA['Bucharest, Romania'];
+      const card = cityData.days[dayIndex] || cityData.days[0];
+
+      const titleEl = document.getElementById('detail-title');
+      if (titleEl) titleEl.innerText = `${card.date} · ${cityData.name}`;
+
+      // Update spot names
+      for (let i = 0; i < 4; i++) {
+        const spotEl = document.getElementById('ref-loc-' + i);
+        if (spotEl && cityData.spots[i]) spotEl.innerText = cityData.spots[i];
+      }
+
+      clearReferencePhoto();
+      initDetailRulerTicks();
+      setTime(16.85);
+      navigateTo('screen-detail');
+    }
+
+    // ----------------------------------------------------
+    // 5. GALLERY INTERVAL & PHASE SELECTOR
+    // ----------------------------------------------------
+    function toggleIntervalPopover() {
+      const popover = document.getElementById('interval-popover');
+      if (popover) popover.classList.toggle('hidden');
+    }
+
+    function setIntervalDays(days) {
+      galleryDaysCount = days;
+      ['7', '15', '30'].forEach(d => {
+        const btn = document.getElementById(`int-btn-${d}`);
+        if (btn) {
+          if (parseInt(d) === days) {
+            btn.className = "px-2 py-1.5 rounded-lg bg-white text-black font-semibold text-center font-mono";
+          } else {
+            btn.className = "px-2 py-1.5 rounded-lg text-white/70 hover:bg-white/10 text-center font-mono";
+          }
+        }
+      });
+      updateIntervalLabel();
+      renderGalleryCards();
+      toggleIntervalPopover();
+      showToast(`Mosaic set to ${days} Days`);
+    }
+
+    function setIntervalPhase(phaseName) {
+      gallerySolarPhase = phaseName;
+      updateIntervalLabel();
+      renderGalleryCards();
+      toggleIntervalPopover();
+      showToast(`Palette moment: ${phaseName}`);
+    }
+
+    function updateIntervalLabel() {
+      const label = document.getElementById('current-interval-label');
+      if (label) label.innerText = `${galleryDaysCount}-Day ${gallerySolarPhase} Mosaic`;
+      const mobileLabel = document.getElementById('current-interval-label-mobile');
+      if (mobileLabel) mobileLabel.innerText = `${galleryDaysCount}D ${gallerySolarPhase}`;
+    }
+
+    function renderGalleryCards() {
+      const grid = document.getElementById('day-cards-grid');
+      if (!grid) return;
+
+      const cityData = CITIES_DATA[currentCity] || CITIES_DATA['Bucharest, Romania'];
+      const daysToRender = cityData.days.slice(0, galleryDaysCount);
+
+      // Adjust CSS grid layout based on card count
+      if (galleryDaysCount === 7) {
+        grid.className = "w-full h-full grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 grid-rows-4 sm:grid-rows-2 md:grid-rows-1 gap-0 overflow-hidden";
+      } else if (galleryDaysCount === 30) {
+        grid.className = "w-full h-full grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 grid-rows-10 sm:grid-rows-6 md:grid-rows-5 gap-0 overflow-hidden";
+      } else {
+        grid.className = "w-full h-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 grid-rows-8 sm:grid-rows-5 md:grid-rows-3 gap-0 overflow-hidden";
+      }
+
+      grid.innerHTML = daysToRender.map((card, idx) => {
+        const photoCount = card.badge ? card.badge.replace(/[^0-9]/g, '') : null;
+        return `
+          <div onclick="openDayDetail(${idx})" class="day-tile group cursor-pointer w-full h-full relative overflow-hidden flex flex-col justify-end select-none">
+            <div class="absolute inset-0 flex flex-col sm:flex-row h-full w-full">
+              <div class="flex-1 h-full" style="background-color: ${card.colors[0]}"></div>
+              <div class="flex-1 h-full" style="background-color: ${card.colors[1]}"></div>
+              <div class="flex-1 h-full" style="background-color: ${card.colors[2]}"></div>
+              <div class="flex-1 h-full" style="background-color: ${card.colors[3]}"></div>
+              <div class="flex-1 h-full" style="background-color: ${card.colors[4]}"></div>
+            </div>
+
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none opacity-80 group-hover:opacity-95 transition-opacity"></div>
+            
+
+            <div class="relative z-10 p-3 sm:p-4 text-white flex items-end justify-between">
+              <div>
+                <div class="text-xs sm:text-sm font-semibold tracking-tight">${card.date}</div>
+                <div class="text-[10px] sm:text-xs font-mono text-white/70 tabular-nums">${card.time} ${gallerySolarPhase}</div>
+              </div>
+
+              ${photoCount ? `
+                <div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-mono text-white border border-white/20">
+                  <svg class="w-3 h-3 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <span>${photoCount}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ----------------------------------------------------
+    // 6. DAY DETAIL SIMULATION & HORIZONTAL RULER SCRUBBER
+    // ----------------------------------------------------
+    const skyRenderer = document.getElementById('sky-renderer');
+    const sunOrb = document.getElementById('sun-orb');
+    let isTimelapsePlaying = false;
+    let timelapseAnimFrameId = null;
+
+    // Day detail discrete steps: 00:00 to 24:00 every 15 min (96 steps)
+    const DETAIL_RULER_GAP = 14;
+    const DETAIL_STEPS = [];
+    for (let i = 0; i <= 96; i++) {
+      const h = i * 0.25;
+      const mm = Math.round((h % 1) * 60);
+      const hh = Math.floor(h);
+      DETAIL_STEPS.push({
+        index: i,
+        h: h,
+        label: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+        pos: i * DETAIL_RULER_GAP
+      });
+    }
+
+    const DETAIL_MIN_POS = 0;
+    const DETAIL_MAX_POS = DETAIL_STEPS[DETAIL_STEPS.length - 1].pos;
+    const DETAIL_TAPE_WIDTH = DETAIL_MAX_POS;
+
+    let currentDetailTapePos = 67 * DETAIL_RULER_GAP; // 16:45 default
+    let currentDetailVelocity = 0;
+    let isDetailRulerDragging = false;
+    let dragDetailStartX = 0;
+    let dragDetailStartTapePos = currentDetailTapePos;
+    let lastDetailDragX = 0;
+    let lastDetailDragTime = 0;
+    let detailAnimFrameId = null;
+    let lastDetailNotifiedIndex = -1;
+
+    const detailBarElements = [];
+
+    function initDetailRulerTicks() {
+      const tape = document.getElementById('detail-ruler-tape');
+      if (!tape) return;
+
+      tape.innerHTML = '';
+      tape.style.width = (DETAIL_TAPE_WIDTH + 80) + 'px';
+      tape.style.transition = 'none';
+      detailBarElements.length = 0;
+
+      DETAIL_STEPS.forEach((step) => {
+        const tickContainer = document.createElement('div');
+        tickContainer.className = 'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center cursor-pointer select-none';
+        tickContainer.style.left = step.pos + 'px';
+        tickContainer.style.width = DETAIL_RULER_GAP + 'px';
+        tickContainer.style.height = '40px';
+        tickContainer.title = step.label;
+
+        // Rounded capsule pill (4.5px x 15px, border-radius 9999px)
+        const bar = document.createElement('div');
+        bar.className = 'pointer-events-none will-change-transform';
+        bar.style.width = '4.5px';
+        bar.style.height = '15px';
+        bar.style.borderRadius = '9999px';
+        bar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+        tickContainer.appendChild(bar);
+        detailBarElements.push(bar);
+
+        tickContainer.onclick = (e) => {
+          e.stopPropagation();
+          smoothScrollDetailToStep(step.index);
+        };
+
+        tape.appendChild(tickContainer);
+      });
+
+      renderDetailTapeAt(currentDetailTapePos);
+      setupDetailRulerEvents();
+    }
+
+    function setDetailTimeDisplayScrolling(isScrolling) {
+      const timeDisplay = document.getElementById('detail-ruler-time-display');
+      if (!timeDisplay) return;
+
+      if (isScrolling) {
+        timeDisplay.className = 'font-sans font-bold tracking-tight text-base sm:text-lg transition-[font-size,transform] duration-150 tabular-nums text-black';
+      } else {
+        timeDisplay.className = 'font-sans font-semibold tracking-tight text-xs sm:text-sm transition-[font-size,transform] duration-200 tabular-nums text-black';
+      }
+    }
+
+    function renderDetailTapeAt(pos) {
+      currentDetailTapePos = pos;
+      const tape = document.getElementById('detail-ruler-tape');
+      if (tape) {
+        tape.style.transform = `translateX(${-pos}px)`;
+      }
+
+      let nearestIdx = Math.round(pos / DETAIL_RULER_GAP);
+      nearestIdx = Math.max(0, Math.min(DETAIL_STEPS.length - 1, nearestIdx));
+
+      const stepAtCenter = DETAIL_STEPS[nearestIdx];
+      const timeDisplay = document.getElementById('detail-ruler-time-display');
+      if (timeDisplay && stepAtCenter) {
+        timeDisplay.innerText = stepAtCenter.label;
+      }
+
+      const windowStart = Math.max(0, nearestIdx - 5);
+      const windowEnd = Math.min(DETAIL_STEPS.length - 1, nearestIdx + 5);
+
+      for (let i = 0; i < DETAIL_STEPS.length; i++) {
+        const bar = detailBarElements[i];
+        if (!bar) continue;
+        const step = DETAIL_STEPS[i];
+
+        if (i >= windowStart && i <= windowEnd) {
+          const dist = Math.abs(step.pos - pos);
+          if (dist < DETAIL_RULER_GAP) {
+            const t = 1 - (dist / DETAIL_RULER_GAP);
+            const h = 15 + 9 * t; // expands to 24px
+            const w = 4.5 + 2.0 * t; // expands to 6.5px
+            const val = Math.round(180 * (1 - t)); // smooth transition to solid black (0)
+
+            bar.style.height = `${h}px`;
+            bar.style.width = `${w}px`;
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = `rgb(${val}, ${val}, ${val})`;
+            bar.style.boxShadow = t > 0.5 ? '0 1px 2px rgba(0, 0, 0, 0.2)' : 'none';
+          } else {
+            bar.style.height = '15px';
+            bar.style.width = '4.5px';
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+            bar.style.boxShadow = 'none';
+          }
+        } else {
+          if (bar.style.height !== '15px') {
+            bar.style.height = '15px';
+            bar.style.width = '4.5px';
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+            bar.style.boxShadow = 'none';
+          }
+        }
+      }
+
+      if (nearestIdx !== lastDetailNotifiedIndex) {
+        lastDetailNotifiedIndex = nearestIdx;
+        if (stepAtCenter) {
+          updateSkySimulation(stepAtCenter.h);
+        }
+      }
+    }
+
+    function smoothScrollDetailToStep(targetIndex) {
+      cancelAnimationFrame(detailAnimFrameId);
+      setDetailTimeDisplayScrolling(true);
+      const targetPos = targetIndex * DETAIL_RULER_GAP;
+
+      function stepAnim() {
+        const diff = targetPos - currentDetailTapePos;
+        if (Math.abs(diff) < 0.3) {
+          renderDetailTapeAt(targetPos);
+          setDetailTimeDisplayScrolling(false);
+          return;
+        }
+        renderDetailTapeAt(currentDetailTapePos + diff * 0.22);
+        detailAnimFrameId = requestAnimationFrame(stepAnim);
+      }
+      detailAnimFrameId = requestAnimationFrame(stepAnim);
+    }
+
+    function smoothScrollDetailToHour(targetHour) {
+      let nearestIdx = Math.round(targetHour / 0.25);
+      nearestIdx = Math.max(0, Math.min(DETAIL_STEPS.length - 1, nearestIdx));
+      smoothScrollDetailToStep(nearestIdx);
+    }
+
+    function startDetailMomentumLoop() {
+      cancelAnimationFrame(detailAnimFrameId);
+      setDetailTimeDisplayScrolling(true);
+
+      function momentumFrame() {
+        if (isDetailRulerDragging) return;
+
+        if (currentDetailTapePos > DETAIL_MAX_POS) {
+          const excess = currentDetailTapePos - DETAIL_MAX_POS;
+          currentDetailTapePos -= excess * 0.18;
+          currentDetailVelocity *= 0.55;
+          currentDetailTapePos += currentDetailVelocity;
+
+          renderDetailTapeAt(currentDetailTapePos);
+
+          if (Math.abs(currentDetailTapePos - DETAIL_MAX_POS) < 0.4 && Math.abs(currentDetailVelocity) < 0.2) {
+            renderDetailTapeAt(DETAIL_MAX_POS);
+            setDetailTimeDisplayScrolling(false);
+            return;
+          }
+        } else if (currentDetailTapePos < DETAIL_MIN_POS) {
+          const excess = DETAIL_MIN_POS - currentDetailTapePos;
+          currentDetailTapePos += excess * 0.18;
+          currentDetailVelocity *= 0.55;
+          currentDetailTapePos += currentDetailVelocity;
+
+          renderDetailTapeAt(currentDetailTapePos);
+
+          if (Math.abs(currentDetailTapePos - DETAIL_MIN_POS) < 0.4 && Math.abs(currentDetailVelocity) < 0.2) {
+            renderDetailTapeAt(DETAIL_MIN_POS);
+            setDetailTimeDisplayScrolling(false);
+            return;
+          }
+        } else {
+          currentDetailVelocity *= 0.93;
+          currentDetailTapePos += currentDetailVelocity;
+
+          if (Math.abs(currentDetailVelocity) < 0.3) {
+            const nearestIdx = Math.round(currentDetailTapePos / DETAIL_RULER_GAP);
+            const clampedIdx = Math.max(0, Math.min(DETAIL_STEPS.length - 1, nearestIdx));
+            const targetPos = clampedIdx * DETAIL_RULER_GAP;
+            const diff = targetPos - currentDetailTapePos;
+            currentDetailTapePos += diff * 0.25;
+
+            renderDetailTapeAt(currentDetailTapePos);
+
+            if (Math.abs(diff) < 0.3 && Math.abs(currentDetailVelocity) < 0.1) {
+              renderDetailTapeAt(targetPos);
+              setDetailTimeDisplayScrolling(false);
+              return;
+            }
+          } else {
+            renderDetailTapeAt(currentDetailTapePos);
+          }
+        }
+
+        detailAnimFrameId = requestAnimationFrame(momentumFrame);
+      }
+
+      detailAnimFrameId = requestAnimationFrame(momentumFrame);
+    }
+
+    let detailRulerEventsBound = false;
+    function setupDetailRulerEvents() {
+      if (detailRulerEventsBound) return;
+      const viewport = document.getElementById('detail-ruler-viewport');
+      if (!viewport) return;
+      detailRulerEventsBound = true;
+
+      function onPointerDown(e) {
+        cancelAnimationFrame(detailAnimFrameId);
+        cancelAnimationFrame(timelapseAnimFrameId);
+        if (isTimelapsePlaying) {
+          toggleTimelapse();
+        }
+        isDetailRulerDragging = true;
+        currentDetailVelocity = 0;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        dragDetailStartX = clientX;
+        lastDetailDragX = clientX;
+        lastDetailDragTime = performance.now();
+        dragDetailStartTapePos = currentDetailTapePos;
+        viewport.style.cursor = 'grabbing';
+        setDetailTimeDisplayScrolling(true);
+        if (e.cancelable && e.type !== 'touchstart') e.preventDefault();
+      }
+
+      function onPointerMove(e) {
+        if (!isDetailRulerDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const now = performance.now();
+        const dt = now - lastDetailDragTime || 16;
+        const dx = clientX - lastDetailDragX;
+
+        currentDetailVelocity = currentDetailVelocity * 0.4 + (-dx / (dt / 16)) * 0.6;
+        lastDetailDragX = clientX;
+        lastDetailDragTime = now;
+
+        const totalDeltaX = clientX - dragDetailStartX;
+        let newPos = dragDetailStartTapePos - totalDeltaX;
+
+        if (newPos > DETAIL_MAX_POS) {
+          const over = newPos - DETAIL_MAX_POS;
+          newPos = DETAIL_MAX_POS + over * 0.28;
+        } else if (newPos < DETAIL_MIN_POS) {
+          const over = DETAIL_MIN_POS - newPos;
+          newPos = DETAIL_MIN_POS - over * 0.28;
+        }
+
+        renderDetailTapeAt(newPos);
+      }
+
+      function onPointerUp() {
+        if (!isDetailRulerDragging) return;
+        isDetailRulerDragging = false;
+        viewport.style.cursor = 'grab';
+        currentDetailVelocity = Math.max(-25, Math.min(25, currentDetailVelocity));
+        startDetailMomentumLoop();
+      }
+
+      viewport.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+
+      viewport.addEventListener('touchstart', onPointerDown, { passive: true });
+      window.addEventListener('touchmove', onPointerMove, { passive: true });
+      window.addEventListener('touchend', onPointerUp);
+
+      viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        cancelAnimationFrame(detailAnimFrameId);
+        setDetailTimeDisplayScrolling(true);
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        currentDetailTapePos += delta * 0.4;
+        currentDetailTapePos = Math.max(DETAIL_MIN_POS - 20, Math.min(DETAIL_MAX_POS + 20, currentDetailTapePos));
+        renderDetailTapeAt(currentDetailTapePos);
+
+        clearTimeout(viewport._wheelTimeout);
+        viewport._wheelTimeout = setTimeout(() => {
+          startDetailMomentumLoop();
+        }, 60);
+      }, { passive: false });
+    }
+
+    function toggleTimelapse() {
+      isTimelapsePlaying = !isTimelapsePlaying;
+      const playIcon = document.getElementById('play-icon');
+      const pauseIcon = document.getElementById('pause-icon');
+
+      if (isTimelapsePlaying) {
+        if (playIcon) playIcon.classList.add('hidden');
+        if (pauseIcon) pauseIcon.classList.remove('hidden');
+
+        function timelapseStep() {
+          if (!isTimelapsePlaying) return;
+          currentDetailTapePos += 1.2;
+          if (currentDetailTapePos > DETAIL_MAX_POS) {
+            currentDetailTapePos = DETAIL_MIN_POS;
+          }
+          renderDetailTapeAt(currentDetailTapePos);
+          timelapseAnimFrameId = requestAnimationFrame(timelapseStep);
+        }
+        timelapseAnimFrameId = requestAnimationFrame(timelapseStep);
+      } else {
+        if (playIcon) playIcon.classList.remove('hidden');
+        if (pauseIcon) pauseIcon.classList.add('hidden');
+        cancelAnimationFrame(timelapseAnimFrameId);
+        startDetailMomentumLoop();
+      }
+    }
+
+    function updateSkySimulation(timeVal) {
+      const palette = getPaletteAtTime(timeVal);
+      const phase = getSkyPhase(timeVal);
+      const timeStr = formatTime(timeVal);
+
+      if (skyRenderer) {
+        skyRenderer.style.background = `
+          radial-gradient(ellipse 80% 35% at 50% 95%, ${palette.sunglow} 0%, transparent 75%),
+          linear-gradient(to bottom, ${palette.zenith} 0%, ${palette.midsky} 48%, ${palette.horizon} 90%)
+        `;
+      }
+
+      let sunTopPercent = 100;
+      if (timeVal >= 6.0 && timeVal <= 19.0) {
+        const progress = (timeVal - 6.0) / (19.0 - 6.0);
+        const arc = Math.sin(progress * Math.PI);
+        sunTopPercent = 88 - (arc * 70);
+      }
+      if (sunOrb) {
+        sunOrb.style.top = `${sunTopPercent}%`;
+        sunOrb.style.background = palette.sunglow;
+      }
+
+      const hudTime = document.getElementById('hud-time');
+      if (hudTime) hudTime.innerText = timeStr;
+
+      const hudPhasePill = document.getElementById('hud-phase-pill');
+      if (hudPhasePill) hudPhasePill.innerText = phase.name;
+
+      const hudSolarMetrics = document.getElementById('hud-solar-metrics');
+      if (hudSolarMetrics) hudSolarMetrics.innerText = `Sun elevation: ${phase.elev} · Azimuth: 236°`;
+
+      const detailTimePhase = document.getElementById('detail-time-phase');
+      if (detailTimePhase) detailTimePhase.innerText = `${timeStr} · ${phase.name}`;
+
+      const detailTimeDisplay = document.getElementById('detail-ruler-time-display');
+      if (detailTimeDisplay && !isDetailRulerDragging) {
+        detailTimeDisplay.innerText = timeStr;
+      }
+
+      updateSwatches(palette);
+    }
+
+    function updateSwatches(palette) {
+      if (!palette) return;
+      const swatches = [
+        { id: 'zenith', hexId: 'zenith-hex', val: palette.zenith },
+        { id: 'midsky', hexId: 'midsky-hex', val: palette.midsky },
+        { id: 'horizon', hexId: 'horizon-hex', val: palette.horizon },
+        { id: 'sunglow', hexId: 'sunglow-hex', val: palette.sunglow },
+        { id: 'cloudtint', hexId: 'cloudtint-hex', val: palette.cloudtint },
+      ];
+
+      swatches.forEach((s, idx) => {
+        const el = document.getElementById(`swatch-${s.id}`);
+        if (el) el.style.backgroundColor = s.val;
+        const hex = document.getElementById(s.hexId);
+        if (hex) hex.innerText = s.val.toUpperCase();
+
+        // Update all share card templates
+        document.querySelectorAll(`.swatch-val-${idx}`).forEach(sw => sw.style.backgroundColor = s.val);
+        document.querySelectorAll(`.hex-val-${idx}`).forEach(hx => hx.innerText = s.val.toUpperCase());
+      });
+    }
+
+    function setTime(timeVal) {
+      let nearestIdx = Math.round(timeVal / 0.25);
+      nearestIdx = Math.max(0, Math.min(DETAIL_STEPS.length - 1, nearestIdx));
+      renderDetailTapeAt(nearestIdx * DETAIL_RULER_GAP);
+      updateSkySimulation(timeVal);
+    }
+
+    function selectReferencePhoto(photoIndex) {
+      const cityData = CITIES_DATA[currentCity] || CITIES_DATA['Bucharest, Romania'];
+      const overlay = document.getElementById('ref-photo-overlay');
+      const badge = document.getElementById('ref-mode-badge');
+      const locText = document.getElementById('ref-photo-location');
+
+      if (overlay) overlay.classList.remove('translate-x-full');
+      if (badge) badge.classList.remove('hidden');
+      if (badge) badge.classList.add('flex');
+
+      if (locText && cityData.spots[photoIndex]) {
+        locText.innerText = `${cityData.spots[photoIndex]}, ${cityData.name}`;
+      }
+
+      showToast(`Loaded reference capture #${photoIndex + 1}`);
+    }
+
+    function clearReferencePhoto() {
+      const overlay = document.getElementById('ref-photo-overlay');
+      const badge = document.getElementById('ref-mode-badge');
+
+      if (overlay) overlay.classList.add('translate-x-full');
+      if (badge) badge.classList.add('hidden');
+      if (badge) badge.classList.remove('flex');
+    }
+
+    // ----------------------------------------------------
+    // 7. AUTOCOMPLETE SEARCH LOGIC (Cities + ZIP / Postal Codes)
+    // ----------------------------------------------------
+    const POSTAL_CODES = [
+      // Bucharest sectors & postal codes
+      { zip: '010011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 1), Romania · 010011' },
+      { zip: '020011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 2), Romania · 020011' },
+      { zip: '030011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 3), Romania · 030011' },
+      { zip: '040011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 4), Romania · 040011' },
+      { zip: '050011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 5), Romania · 050011' },
+      { zip: '060011', city: 'Bucharest, Romania', label: 'Bucharest (Sector 6), Romania · 060011' },
+      // Other Romanian cities
+      { zip: '400001', city: 'Cluj-Napoca, Romania', label: 'Cluj-Napoca, Romania · 400001' },
+      { zip: '300001', city: 'Timisoara, Romania', label: 'Timisoara, Romania · 300001' },
+      { zip: '700001', city: 'Iasi, Romania', label: 'Iasi, Romania · 700001' },
+      { zip: '500001', city: 'Brasov, Romania', label: 'Brasov, Romania · 500001' },
+      { zip: '900001', city: 'Constanta, Romania', label: 'Constanta, Romania · 900001' },
+      // US ZIP codes
+      { zip: '10001', city: 'New York, United States', label: 'New York (Manhattan), United States · 10001' },
+      { zip: '90210', city: 'Los Angeles, United States', label: 'Beverly Hills / Los Angeles, United States · 90210' },
+      { zip: '94102', city: 'San Francisco, United States', label: 'San Francisco, United States · 94102' },
+      { zip: '98101', city: 'Seattle, United States', label: 'Seattle, United States · 98101' },
+      { zip: '60601', city: 'Chicago, United States', label: 'Chicago, United States · 60601' },
+      { zip: '33101', city: 'Miami, United States', label: 'Miami, United States · 33101' },
+      { zip: '78701', city: 'Austin, United States', label: 'Austin, United States · 78701' },
+      // European & Global postal codes
+      { zip: '75001', city: 'Paris, France', label: 'Paris (1er Arr.), France · 75001' },
+      { zip: '75008', city: 'Paris, France', label: 'Paris (Champs-Élysées), France · 75008' },
+      { zip: 'SW1A', city: 'London, United Kingdom', label: 'London (Westminster), United Kingdom · SW1A' },
+      { zip: 'EC1A', city: 'London, United Kingdom', label: 'London (City), United Kingdom · EC1A' },
+      { zip: '10115', city: 'Berlin, Germany', label: 'Berlin (Mitte), Germany · 10115' },
+      { zip: '100-0001', city: 'Tokyo, Japan', label: 'Tokyo (Chiyoda), Japan · 100-0001' },
+      { zip: '101', city: 'Reykjavik, Iceland', label: 'Reykjavik (City Center), Iceland · 101' },
+      { zip: '1012', city: 'Amsterdam, Netherlands', label: 'Amsterdam (Centrum), Netherlands · 1012' },
+      { zip: '08001', city: 'Barcelona, Spain', label: 'Barcelona (Ciutat Vella), Spain · 08001' },
+      { zip: '00186', city: 'Rome, Italy', label: 'Rome (Centro Storico), Italy · 00186' },
+      { zip: '8001', city: 'Zurich, Switzerland', label: 'Zurich (Altstadt), Switzerland · 8001' },
+      { zip: 'C1002', city: 'Buenos Aires, Argentina', label: 'Buenos Aires (San Nicolás), Argentina · C1002' },
+      { zip: '2000', city: 'Sydney, Australia', label: 'Sydney (CBD), Australia · 2000' }
+    ];
+
+    const CITIES_LIST = Object.keys(CITIES_DATA);
+
+    function wireAutocomplete(inputId, dropdownId) {
+      const input = document.getElementById(inputId);
+      const dropdown = document.getElementById(dropdownId);
+      if (!input || !dropdown) return;
+
+      input.addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        if (query.length === 0) {
+          dropdown.classList.add('hidden');
+          return;
+        }
+
+        const combined = [];
+        const isNumeric = /^\d+$/.test(query);
+
+        // 1. Check cities in CITIES_LIST
+        // Rank matches: exact match first, then startsWith, then includes
+        const cityMatches = CITIES_LIST.filter(c => c.toLowerCase().includes(query));
+        cityMatches.sort((a, b) => {
+          const aLower = a.toLowerCase();
+          const bLower = b.toLowerCase();
+          const aCity = aLower.split(',')[0].trim();
+          const bCity = bLower.split(',')[0].trim();
+          if (aCity === query && bCity !== query) return -1;
+          if (bCity === query && aCity !== query) return 1;
+          if (aCity.startsWith(query) && !bCity.startsWith(query)) return -1;
+          if (bCity.startsWith(query) && !aCity.startsWith(query)) return 1;
+          return 0;
+        });
+
+        cityMatches.forEach(cm => {
+          combined.push({
+            type: 'city',
+            cityKey: cm,
+            display: cm,
+            code: null
+          });
+        });
+
+        // 2. Check postal codes
+        // If numeric or alphanumeric postal code, search POSTAL_CODES
+        const zipMatches = POSTAL_CODES.filter(item => {
+          if (isNumeric) {
+            return item.zip.toLowerCase().includes(query);
+          }
+          // If letters, only match if postal code itself starts with query, or sub-district matches
+          return item.zip.toLowerCase().startsWith(query) || 
+                 (item.label.toLowerCase().includes(query) && !combined.some(c => c.cityKey === item.city));
+        });
+
+        zipMatches.forEach(zm => {
+          // Avoid duplicate if general city was already added and matches this cityKey
+          if (!combined.some(item => item.cityKey === zm.city && item.type === 'city')) {
+            combined.push({
+              type: 'zip',
+              cityKey: zm.city,
+              display: zm.label,
+              code: zm.zip
+            });
+          }
+        });
+
+        // 3. Custom numeric postal code fallback
+        if (/^\d{3,6}$/.test(query) && !combined.some(item => item.code === query)) {
+          combined.unshift({
+            type: 'custom_zip',
+            cityKey: `Postal ${query}`,
+            display: `Postal Code ${query}`,
+            code: query
+          });
+        }
+
+        const isDark = (dropdownId !== 'modal-city-dropdown');
+        const results = combined.slice(0, 6);
+
+        if (results.length === 0) {
+          if (isDark) {
+            dropdown.className = "absolute left-0 right-0 top-full mt-2.5 bg-black text-white rounded-full h-[52px] sm:h-[56px] overflow-hidden z-30 border border-white/20 shadow-2xl flex items-center px-6";
+            dropdown.innerHTML = `<span class="text-xs text-white/50 font-mono">No matching city or postal code found</span>`;
+          } else {
+            dropdown.className = "rounded-full h-[52px] overflow-hidden bg-white text-black border border-black/15 shadow-xl flex items-center px-5";
+            dropdown.innerHTML = `<span class="text-xs text-neutral-400 font-mono">No matching city or postal code found</span>`;
+          }
+          dropdown.classList.remove('hidden');
+          return;
+        }
+
+        // Single result vs Multi-results styling
+        const isSingle = (results.length === 1);
+
+        if (isDark) {
+          if (isSingle) {
+            // Exactly same size and rounded-full borders as search input (52px mobile / 56px desktop)
+            dropdown.className = "absolute left-0 right-0 top-full mt-2.5 bg-black text-white rounded-full h-[52px] sm:h-[56px] overflow-hidden z-30 border border-white/20 shadow-2xl flex items-center p-0";
+          } else {
+            dropdown.className = "absolute left-0 right-0 top-full mt-3 bg-black text-white rounded-3xl overflow-hidden divide-y divide-white/10 z-30 border border-white/20 shadow-2xl max-h-72 overflow-y-auto";
+          }
+        } else {
+          if (isSingle) {
+            // Modal search bar is 52px height, rounded-full
+            dropdown.className = "rounded-full h-[52px] overflow-hidden bg-white text-black border border-black/15 shadow-xl flex items-center p-0";
+          } else {
+            dropdown.className = "rounded-2xl divide-y divide-neutral-100 bg-white border border-neutral-200/80 shadow-xl max-h-56 overflow-y-auto";
+          }
+        }
+
+        dropdown.innerHTML = results.map(item => {
+          let title = '';
+          let subtitle = '';
+          const isPostal = (item.type === 'zip' || item.type === 'custom_zip');
+
+          if (item.type === 'custom_zip') {
+            title = `Postal Code ${item.code}`;
+            subtitle = `Explore sky for postal code ${item.code}`;
+          } else if (item.type === 'zip') {
+            // The result should ALWAYS display the city as the primary title!
+            const labelParts = item.display.split(',');
+            title = labelParts[0].trim(); // e.g. "Paris (1er Arr.)" or "Beverly Hills / Los Angeles"
+            const countryPart = labelParts[1] ? labelParts[1].split('·')[0].trim() : '';
+            subtitle = `${countryPart} · Postal Code ${item.code}`;
+          } else {
+            // City match:
+            const parts = item.cityKey.split(',');
+            title = parts[0].trim();
+            const country = parts[1] ? parts[1].trim() : '';
+            const cityInfo = CITIES_DATA[item.cityKey];
+            const coord = cityInfo ? cityInfo.coords.split(',')[0].trim() : '';
+            const isHq = item.cityKey.toLowerCase().includes('bucharest');
+            subtitle = country + (coord ? ` · ${coord}` : '') + (isHq ? ' · HQ' : '');
+          }
+
+          if (isDark) {
+            const btnClass = isSingle
+              ? "w-full h-full px-5 sm:px-6 rounded-full hover:bg-white/10 active:bg-white/15 flex items-center justify-between text-white transition-colors group cursor-pointer"
+              : "w-full px-4 sm:px-5 py-3 text-left hover:bg-white/10 active:bg-white/15 flex items-center justify-between text-white transition-colors group cursor-pointer";
+
+            return `
+              <button onclick="confirmLocation('${item.cityKey}')" class="${btnClass}">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  ${isPostal && isNumeric ? `
+                    <div class="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center text-[9px] font-mono font-bold tracking-tight shrink-0 shadow-xs">
+                      ZIP
+                    </div>
+                  ` : `
+                    <div class="w-7 h-7 rounded-full bg-white/10 text-white/80 flex items-center justify-center shrink-0">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    </div>
+                  `}
+                  <div class="min-w-0 flex-1 text-left">
+                    <div class="text-xs sm:text-sm font-semibold text-white tracking-tight truncate group-hover:translate-x-0.5 transition-transform">
+                      ${title}
+                    </div>
+                    <div class="text-[11px] text-white/50 font-mono truncate">
+                      ${subtitle}
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0 ml-3 text-white/50 group-hover:text-white transition-colors">
+                  <span class="text-[10px] font-mono">Select</span>
+                  <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+              </button>
+            `;
+          } else {
+            const btnClass = isSingle
+              ? "w-full h-full px-5 rounded-full hover:bg-neutral-100 active:bg-neutral-150 flex items-center justify-between text-neutral-900 transition-colors group cursor-pointer"
+              : "w-full px-4 sm:px-5 py-3 text-left hover:bg-neutral-100 active:bg-neutral-150 flex items-center justify-between text-neutral-900 transition-colors group cursor-pointer";
+
+            return `
+              <button onclick="confirmLocation('${item.cityKey}')" class="${btnClass}">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  ${isPostal && isNumeric ? `
+                    <div class="w-7 h-7 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center text-[9px] font-mono font-bold tracking-tight shrink-0 shadow-xs">
+                      ZIP
+                    </div>
+                  ` : `
+                    <div class="w-7 h-7 rounded-full bg-neutral-100 text-neutral-600 flex items-center justify-center shrink-0">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    </div>
+                  `}
+                  <div class="min-w-0 flex-1 text-left">
+                    <div class="text-xs sm:text-sm font-semibold text-neutral-900 tracking-tight truncate group-hover:translate-x-0.5 transition-transform">
+                      ${title}
+                    </div>
+                    <div class="text-[11px] text-neutral-400 font-mono truncate">
+                      ${subtitle}
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0 ml-3 text-neutral-400 group-hover:text-neutral-900 transition-colors">
+                  <span class="text-[10px] font-mono">Select</span>
+                  <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+              </button>
+            `;
+          }
+        }).join('');
+
+        dropdown.classList.remove('hidden');
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const query = input.value.trim();
+          if (query) {
+            confirmLocation(query.includes(',') ? query : `${query}, HQ`);
+          }
+        }
+      });
+    }
+
+    wireAutocomplete('city-search-input', 'city-dropdown');
+    wireAutocomplete('modal-city-search-input', 'modal-city-dropdown');
+
+    // ----------------------------------------------------
+    // 8. SHARE MODAL & 4 DISTINCT CARD STYLES
+    // ----------------------------------------------------
+    let currentCardStyle = 'studio';
+
+    function triggerShare() {
+      const modal = document.getElementById('share-modal');
+      if (!modal) return;
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.remove('scale-95');
+    }
+
+    function closeShareModal() {
+      const modal = document.getElementById('share-modal');
+      if (!modal) return;
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.add('scale-95');
+    }
+
+    function setCardStyle(styleName) {
+      currentCardStyle = styleName;
+      ['studio', 'telemetry', 'horizon', 'monolith'].forEach(s => {
+        const btn = document.getElementById(`btn-style-${s}`);
+        const cardVariant = document.getElementById(`card-variant-${s}`);
+        if (btn) {
+          if (s === styleName) {
+            btn.className = "px-3 py-1 rounded-full bg-black text-white shadow-sm transition-colors";
+          } else {
+            btn.className = "px-3 py-1 rounded-full text-neutral-600 hover:text-black transition-colors";
+          }
+        }
+        if (cardVariant) {
+          if (s === styleName) {
+            cardVariant.classList.remove('hidden');
+          } else {
+            cardVariant.classList.add('hidden');
+          }
+        }
+      });
+    }
+
+    function updateShareCardData(cityData) {
+      // Studio
+      const studioCity = document.getElementById('studio-city');
+      if (studioCity) studioCity.innerText = cityData.name.toUpperCase();
+      const studioCoords = document.getElementById('studio-coords');
+      if (studioCoords) studioCoords.innerText = cityData.coords;
+
+      // Telemetry
+      const telCity = document.getElementById('telemetry-city');
+      if (telCity) telCity.innerText = `${cityData.name.toUpperCase()} HQ`;
+      const telCoords = document.getElementById('telemetry-coords');
+      if (telCoords) telCoords.innerText = `${cityData.coords} · ${cityData.country.toUpperCase()}`;
+      const telSunset = document.getElementById('telemetry-sunset');
+      if (telSunset) telSunset.innerText = cityData.sunsetTime;
+
+      // Horizon
+      const horizTitle = document.getElementById('horizon-title');
+      if (horizTitle) horizTitle.innerText = `Sky above ${cityData.name}`;
+
+      // Monolith
+      const monoCity = document.getElementById('monolith-city');
+      if (monoCity) monoCity.innerText = cityData.name.toUpperCase();
+      const monoSub = document.getElementById('monolith-sub');
+      if (monoSub) monoSub.innerText = `${cityData.badge.split('·')[2]?.trim() || 'HQ'} · ${cityData.sunsetTime} · NOV 14`;
+    }
+
+    function copyShareLink() {
+      navigator.clipboard?.writeText(window.location.href);
+      showToast('Share link copied to clipboard');
+    }
+
+    function downloadStravaCard() {
+      showToast(`Rendering ${currentCardStyle.toUpperCase()} card image...`);
+      setTimeout(() => {
+        showToast('Saved sky-card.png');
+      }, 500);
+    }
+
+    function shareTo(platform) {
+      showToast(`Opening share sheet for ${platform}...`);
+    }
+
+    // ----------------------------------------------------
+    // 9. SUBMIT FLOW
+    // ----------------------------------------------------
+    function openSubmitModal() {
+      const modal = document.getElementById('submit-modal');
+      if (!modal) return;
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.remove('scale-95');
+    }
+
+    function closeSubmitModal() {
+      const modal = document.getElementById('submit-modal');
+      if (!modal) return;
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.add('scale-95');
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) showToast(`Loaded: ${file.name}`);
+    }
+
+    function randomizeHandle() {
+      const suffix = Math.random().toString(16).substring(2, 6);
+      const handleEl = document.getElementById('contributor-handle');
+      if (handleEl) handleEl.innerText = `sky-bucharest-${suffix}`;
+      showToast('Generated new anonymous handle');
+    }
+
+    function submitSky() {
+      const btn = document.getElementById('submit-btn');
+      if (btn) btn.innerHTML = `<span>Submitted for automated check...</span>`;
+      setTimeout(() => {
+        closeSubmitModal();
+        showToast('Photo submitted! Passing automated review');
+        if (btn) btn.innerHTML = `<span>Submit for review</span>`;
+      }, 700);
+    }
+
+    function copyHex(elementId) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      const text = el.innerText.trim();
+      navigator.clipboard?.writeText(text);
+      showToast(`Copied ${text}`);
+    }
+
+    // ----------------------------------------------------
+    // 10. PROJECT INFO & TELEMETRY
+    // ----------------------------------------------------
+    function openInfoModal() {
+      const modal = document.getElementById('info-modal');
+      if (!modal) return;
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.remove('scale-95');
+      if (window.skyTelemetry) window.skyTelemetry.logEvent('open_info_modal');
+    }
+
+    function closeInfoModal() {
+      const modal = document.getElementById('info-modal');
+      if (!modal) return;
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      const card = modal.querySelector('.modal-card');
+      if (card) card.classList.add('scale-95');
+    }
+
+    function toggleLegalDoc(type) {
+      const doc = document.getElementById(`legal-doc-${type}`);
+      if (!doc) return;
+      const isHidden = doc.classList.contains('hidden');
+      doc.classList.toggle('hidden');
+      if (window.skyTelemetry) window.skyTelemetry.logEvent('toggle_legal_doc', { doc: type, expanded: isHidden });
+    }
+
+    function scrollToInfoSection(id) {
+      const section = document.getElementById(id);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // Minimal, Non-Invasive Usage Telemetry (Cloudflare Web Analytics compatible, zero cookies, zero localStorage, zero PII)
+    window.skyTelemetry = {
+      logEvent: function(name, data) {
+        // Privacy-first event tracker: strictly anonymous aggregate metrics
+        if (window.console && console.info) {
+          console.info(`[SkyTelemetry] Event: ${name}`, data || '');
+        }
+      }
+    };
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      if (!toast || !toastMsg) return;
+
+      toastMsg.innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+      }, 2200);
+    }
+
+    // ----------------------------------------------------
+    // HORIZONTAL RULER STEP SCRUBBER ENGINE (iOS Momentum & Elastic Bounce)
+    // ----------------------------------------------------
+    const RULER_GAP = 14; // Pixels per discrete step
+    const BUCHAREST_LIVE_HOUR = 15.28; // 15:17 EET
+
+    // Build discrete steps: 00:00 to 15:00 every 15m (e.g. 11:15), plus 15:17 LIVE, plus disabled future steps
+    const RULER_STEPS = [];
+    for (let i = 0; i <= 60; i++) {
+      const h = i * 0.25;
+      const mm = Math.round((h % 1) * 60);
+      const hh = Math.floor(h);
+      RULER_STEPS.push({
+        index: i,
+        h: h,
+        label: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+        pos: i * RULER_GAP,
+        disabled: false
+      });
+    }
+
+    const LIVE_STEP_INDEX = 61;
+    RULER_STEPS.push({
+      index: LIVE_STEP_INDEX,
+      h: BUCHAREST_LIVE_HOUR,
+      label: '15:17',
+      pos: LIVE_STEP_INDEX * RULER_GAP,
+      disabled: false,
+      isLive: true
+    });
+
+    for (let i = 62; i <= 96; i++) {
+      const h = i * 0.25;
+      const mm = Math.round((h % 1) * 60);
+      const hh = Math.floor(h);
+      const stepIdx = RULER_STEPS.length;
+      RULER_STEPS.push({
+        index: stepIdx,
+        h: h,
+        label: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+        pos: stepIdx * RULER_GAP,
+        disabled: true
+      });
+    }
+
+    const MIN_POS = 0;
+    const MAX_POS = LIVE_STEP_INDEX * RULER_GAP; // 854px
+    const RULER_TAPE_WIDTH = RULER_STEPS[RULER_STEPS.length - 1].pos;
+
+    let currentTapePos = MAX_POS;
+    let currentVelocity = 0;
+    let isRulerDragging = false;
+    let dragStartX = 0;
+    let dragStartTapePos = MAX_POS;
+    let lastDragX = 0;
+    let lastDragTime = 0;
+    let animFrameId = null;
+    let lastNotifiedIndex = LIVE_STEP_INDEX;
+
+    const rulerBarElements = [];
+    let rulerLiveDotEl = null;
+
+    function getSkyContrastColor(hourVal) {
+      const palette = getPaletteAtTime(hourVal);
+      const hRgb = hexToRgb(palette.horizon);
+      const sRgb = hexToRgb(palette.sunglow);
+      
+      // The slider sits at ~75-80% height on the Home sky gradient
+      const bgR = hRgb.r * 0.55 + sRgb.r * 0.45;
+      const bgG = hRgb.g * 0.55 + sRgb.g * 0.45;
+      const bgB = hRgb.b * 0.55 + sRgb.b * 0.45;
+
+      // Standard perceptual luminance
+      const lum = (0.299 * bgR + 0.587 * bgG + 0.114 * bgB) / 255;
+
+      // Hermite smoothstep transition between dark (lum <= 0.28) and light (lum >= 0.58)
+      const t = Math.max(0, Math.min(1, (lum - 0.28) / (0.58 - 0.28)));
+      const smooth = t * t * (3 - 2 * t);
+
+      // Smoothly interpolate text and active pill from white (255) when dark to black (0) when light
+      const val = Math.round(255 * (1 - smooth));
+      
+      return {
+        lum: lum,
+        smooth: smooth, // 1 = light sky, 0 = dark sky
+        textColor: `rgb(${val}, ${val}, ${val})`,
+        activeColor: `rgb(${val}, ${val}, ${val})`,
+        val: val
+      };
+    }
+
+    function updateHomeBottomTextColor(contrast) {
+      const footerText = document.getElementById('home-footer-text');
+      if (!footerText) return;
+
+      const baseColor = contrast.textColor;
+      const textShadow = contrast.smooth > 0.5 
+        ? '0 1px 1px rgba(255, 255, 255, 0.45)' 
+        : '0 1px 3px rgba(0, 0, 0, 0.85)';
+
+      footerText.style.color = baseColor;
+      footerText.style.textShadow = textShadow;
+    }
+
+    function initRulerTicks() {
+      const tape = document.getElementById('ruler-tape');
+      if (!tape) return;
+
+      tape.innerHTML = '';
+      tape.style.width = (RULER_TAPE_WIDTH + 80) + 'px';
+      tape.style.transition = 'none';
+      rulerBarElements.length = 0;
+      rulerLiveDotEl = null;
+
+      const contrast = getSkyContrastColor(BUCHAREST_LIVE_HOUR);
+
+      RULER_STEPS.forEach((step) => {
+        const tickContainer = document.createElement('div');
+        tickContainer.className = 'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center cursor-pointer select-none';
+        tickContainer.style.left = step.pos + 'px';
+        tickContainer.style.width = RULER_GAP + 'px';
+        tickContainer.style.height = '40px';
+        tickContainer.title = step.disabled ? `${step.label} (Blocked · Future)` : (step.isLive ? 'Bucharest HQ Live · 15:17 EET' : step.label);
+
+        // Circled pill: width 4.5px, height 15px, full border-radius 9999px (unmistakably rounded, not squared)
+        const bar = document.createElement('div');
+        bar.className = 'pointer-events-none will-change-transform';
+        bar.style.width = '4.5px';
+        bar.style.height = '15px';
+        bar.style.borderRadius = '9999px';
+        bar.style.backgroundColor = step.disabled ? 'rgba(255, 255, 255, 0.18)' : `rgba(255, 255, 255, ${0.4 + 0.35 * contrast.smooth})`;
+        tickContainer.appendChild(bar);
+        rulerBarElements.push(bar);
+
+        if (step.isLive) {
+          const dot = document.createElement('div');
+          dot.id = 'ruler-live-dot';
+          dot.className = 'absolute rounded-full bg-[#22c55e] pointer-events-none shadow-xs';
+          dot.style.width = '4.5px';
+          dot.style.height = '4.5px';
+          dot.style.top = 'calc(50% + 12px)';
+          dot.style.left = '50%';
+          dot.style.transform = 'translateX(-50%)';
+          tickContainer.appendChild(dot);
+          rulerLiveDotEl = dot;
+        }
+
+        tickContainer.onclick = (e) => {
+          e.stopPropagation();
+          if (step.disabled) return;
+          smoothScrollToStep(step.index);
+        };
+
+        tape.appendChild(tickContainer);
+      });
+
+      renderTapeAt(MAX_POS);
+      updateStepFeedback(LIVE_STEP_INDEX);
+      setTimeDisplayScrolling(false);
+      setupRulerEvents();
+    }
+
+    function setTimeDisplayScrolling(isScrolling) {
+      const timeDisplay = document.getElementById('ruler-time-display');
+      if (!timeDisplay) return;
+
+      if (isScrolling) {
+        timeDisplay.className = 'font-sans font-bold tracking-tight text-lg sm:text-xl transition-[font-size,transform] duration-150 tabular-nums';
+      } else {
+        timeDisplay.className = 'font-sans font-semibold tracking-tight text-xs sm:text-sm transition-[font-size,transform] duration-200 tabular-nums';
+      }
+    }
+
+    function renderTapeAt(pos) {
+      currentTapePos = pos;
+      const tape = document.getElementById('ruler-tape');
+      if (tape) {
+        tape.style.transform = `translateX(${-pos}px)`;
+      }
+
+      // Determine nearest discrete step
+      let nearestIdx = Math.round(pos / RULER_GAP);
+      nearestIdx = Math.max(0, Math.min(LIVE_STEP_INDEX, nearestIdx));
+
+      const stepAtCenter = RULER_STEPS[nearestIdx];
+      const contrast = getSkyContrastColor(stepAtCenter ? stepAtCenter.h : BUCHAREST_LIVE_HOUR);
+
+      // Smoothly update time display color with background contrast
+      const timeDisplay = document.getElementById('ruler-time-display');
+      if (timeDisplay) {
+        timeDisplay.style.color = contrast.textColor;
+        timeDisplay.style.textShadow = contrast.smooth > 0.5 
+          ? '0 1px 1px rgba(255, 255, 255, 0.5)' 
+          : '0 1px 3px rgba(0, 0, 0, 0.8)';
+      }
+
+      // Smoothly update home bottom text with background contrast
+      updateHomeBottomTextColor(contrast);
+
+      // Focal window: update bars within +- 5 steps of the center
+      const windowStart = Math.max(0, nearestIdx - 5);
+      const windowEnd = Math.min(RULER_STEPS.length - 1, nearestIdx + 5);
+
+      for (let i = 0; i < RULER_STEPS.length; i++) {
+        const bar = rulerBarElements[i];
+        if (!bar) continue;
+        const step = RULER_STEPS[i];
+
+        if (i >= windowStart && i <= windowEnd) {
+          const dist = Math.abs(step.pos - pos);
+          if (dist < RULER_GAP) {
+            // Smooth morphing to focused active state (circule/pill shape: from 4.5px/15px to 6.5px/24px)
+            const t = 1 - (dist / RULER_GAP); // 0 to 1
+            const h = 15 + 9 * t;
+            const w = 4.5 + 2.0 * t;
+
+            // Interpolate color smoothly from normal white/grey to the contrast active color (black on day, white on night)
+            const targetR = contrast.val;
+            const targetG = contrast.val;
+            const targetB = contrast.val;
+            const baseR = 255;
+            const baseG = 255;
+            const baseB = 255;
+            const r = Math.round(baseR + (targetR - baseR) * t);
+            const g = Math.round(baseG + (targetG - baseG) * t);
+            const b = Math.round(baseB + (targetB - baseB) * t);
+
+            bar.style.height = `${h}px`;
+            bar.style.width = `${w}px`;
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            bar.style.boxShadow = t > 0.5 
+              ? (contrast.smooth > 0.5 ? '0 1px 2px rgba(0,0,0,0.2)' : '0 0 4px rgba(255,255,255,0.4)')
+              : 'none';
+
+            if (step.isLive && rulerLiveDotEl) {
+              rulerLiveDotEl.style.top = `calc(50% + ${h / 2 + 4}px)`;
+            }
+          } else {
+            bar.style.height = '15px';
+            bar.style.width = '4.5px';
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = step.disabled ? 'rgba(255, 255, 255, 0.18)' : `rgba(255, 255, 255, ${0.4 + 0.35 * contrast.smooth})`;
+            bar.style.boxShadow = 'none';
+            if (step.isLive && rulerLiveDotEl) {
+              rulerLiveDotEl.style.top = 'calc(50% + 12px)';
+            }
+          }
+        } else {
+          if (bar.style.height !== '15px') {
+            bar.style.height = '15px';
+            bar.style.width = '4.5px';
+            bar.style.borderRadius = '9999px';
+            bar.style.backgroundColor = step.disabled ? 'rgba(255, 255, 255, 0.18)' : `rgba(255, 255, 255, ${0.4 + 0.35 * contrast.smooth})`;
+            bar.style.boxShadow = 'none';
+            if (step.isLive && rulerLiveDotEl) {
+              rulerLiveDotEl.style.top = 'calc(50% + 12px)';
+            }
+          }
+        }
+      }
+
+      if (nearestIdx !== lastNotifiedIndex) {
+        lastNotifiedIndex = nearestIdx;
+        updateStepFeedback(nearestIdx);
+      }
+    }
+
+    function updateStepFeedback(stepIndex) {
+      const step = RULER_STEPS[stepIndex];
+      if (!step) return;
+
+      const timeDisplay = document.getElementById('ruler-time-display');
+      if (timeDisplay) {
+        timeDisplay.innerText = step.label;
+      }
+
+      updateBucharestHomeSky(step.h);
+    }
+
+    function smoothScrollToStep(targetIndex) {
+      cancelAnimationFrame(animFrameId);
+      setTimeDisplayScrolling(true);
+      const targetPos = targetIndex * RULER_GAP;
+
+      function stepAnim() {
+        const diff = targetPos - currentTapePos;
+        if (Math.abs(diff) < 0.3) {
+          renderTapeAt(targetPos);
+          setTimeDisplayScrolling(false);
+          return;
+        }
+        renderTapeAt(currentTapePos + diff * 0.22);
+        animFrameId = requestAnimationFrame(stepAnim);
+      }
+      animFrameId = requestAnimationFrame(stepAnim);
+    }
+
+    function startMomentumLoop() {
+      cancelAnimationFrame(animFrameId);
+      setTimeDisplayScrolling(true);
+
+      function momentumFrame() {
+        if (isRulerDragging) return;
+
+        // 1. Boundary bounce physics
+        if (currentTapePos > MAX_POS) {
+          // Overscroll past LIVE time (future) -> bounce back!
+          const excess = currentTapePos - MAX_POS;
+          currentTapePos -= excess * 0.18;
+          currentVelocity *= 0.55;
+          currentTapePos += currentVelocity;
+
+          renderTapeAt(currentTapePos);
+
+          if (Math.abs(currentTapePos - MAX_POS) < 0.4 && Math.abs(currentVelocity) < 0.2) {
+            renderTapeAt(MAX_POS);
+            setTimeDisplayScrolling(false);
+            return;
+          }
+        } else if (currentTapePos < MIN_POS) {
+          // Overscroll before 00:00 (past) -> bounce back!
+          const excess = MIN_POS - currentTapePos;
+          currentTapePos += excess * 0.18;
+          currentVelocity *= 0.55;
+          currentTapePos += currentVelocity;
+
+          renderTapeAt(currentTapePos);
+
+          if (Math.abs(currentTapePos - MIN_POS) < 0.4 && Math.abs(currentVelocity) < 0.2) {
+            renderTapeAt(MIN_POS);
+            setTimeDisplayScrolling(false);
+            return;
+          }
+        } else {
+          // 2. Normal inertia coasting
+          currentVelocity *= 0.93;
+          currentTapePos += currentVelocity;
+
+          // When velocity drops, softly snap onto nearest step
+          if (Math.abs(currentVelocity) < 0.3) {
+            const nearestIdx = Math.round(currentTapePos / RULER_GAP);
+            const clampedIdx = Math.max(0, Math.min(LIVE_STEP_INDEX, nearestIdx));
+            const targetPos = clampedIdx * RULER_GAP;
+            const diff = targetPos - currentTapePos;
+            currentTapePos += diff * 0.25;
+
+            renderTapeAt(currentTapePos);
+
+            if (Math.abs(diff) < 0.3 && Math.abs(currentVelocity) < 0.1) {
+              renderTapeAt(targetPos);
+              setTimeDisplayScrolling(false);
+              return;
+            }
+          } else {
+            renderTapeAt(currentTapePos);
+          }
+        }
+
+        animFrameId = requestAnimationFrame(momentumFrame);
+      }
+
+      animFrameId = requestAnimationFrame(momentumFrame);
+    }
+
+    let rulerEventsBound = false;
+    function setupRulerEvents() {
+      if (rulerEventsBound) return;
+      const rulerViewport = document.getElementById('ruler-viewport');
+      if (!rulerViewport) return;
+      rulerEventsBound = true;
+
+      function onRulerPointerDown(e) {
+        cancelAnimationFrame(animFrameId);
+        isRulerDragging = true;
+        currentVelocity = 0;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        dragStartX = clientX;
+        lastDragX = clientX;
+        lastDragTime = performance.now();
+        dragStartTapePos = currentTapePos;
+        rulerViewport.style.cursor = 'grabbing';
+        setTimeDisplayScrolling(true);
+        if (e.cancelable && e.type !== 'touchstart') e.preventDefault();
+      }
+
+      function onRulerPointerMove(e) {
+        if (!isRulerDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const now = performance.now();
+        const dt = now - lastDragTime || 16;
+        const dx = clientX - lastDragX;
+
+        // Instantaneous velocity (with smoothing)
+        currentVelocity = currentVelocity * 0.4 + (-dx / (dt / 16)) * 0.6;
+        lastDragX = clientX;
+        lastDragTime = now;
+
+        const totalDeltaX = clientX - dragStartX;
+        let newPos = dragStartTapePos - totalDeltaX;
+
+        // Elastic rubber-banding when dragging outside bounds (iOS style)
+        if (newPos > MAX_POS) {
+          const over = newPos - MAX_POS;
+          newPos = MAX_POS + over * 0.28;
+        } else if (newPos < MIN_POS) {
+          const over = MIN_POS - newPos;
+          newPos = MIN_POS - over * 0.28;
+        }
+
+        renderTapeAt(newPos);
+      }
+
+      function onRulerPointerUp() {
+        if (!isRulerDragging) return;
+        isRulerDragging = false;
+        rulerViewport.style.cursor = 'grab';
+
+        // Clamp initial launch velocity for natural feel
+        currentVelocity = Math.max(-25, Math.min(25, currentVelocity));
+
+        // Start momentum and bounce animation
+        startMomentumLoop();
+      }
+
+      rulerViewport.addEventListener('mousedown', onRulerPointerDown);
+      window.addEventListener('mousemove', onRulerPointerMove);
+      window.addEventListener('mouseup', onRulerPointerUp);
+
+      rulerViewport.addEventListener('touchstart', onRulerPointerDown, { passive: true });
+      window.addEventListener('touchmove', onRulerPointerMove, { passive: true });
+      window.addEventListener('touchend', onRulerPointerUp);
+
+      rulerViewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        cancelAnimationFrame(animFrameId);
+        setTimeDisplayScrolling(true);
+
+        const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+        // Add momentum from wheel delta
+        currentVelocity += delta * 0.12;
+        currentVelocity = Math.max(-24, Math.min(24, currentVelocity));
+
+        startMomentumLoop();
+      }, { passive: false });
+    }
+
+    // ----------------------------------------------------
+    // INITIALIZATION (After all engines & constants are defined)
+    // ----------------------------------------------------
+    function initSkyPaletteApp() {
+      initRulerTicks();
+      initDetailRulerTicks();
+      renderGalleryCards();
+      setTime(16.85);
+      setCardStyle('studio');
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSkyPaletteApp);
+    } else {
+      initSkyPaletteApp();
+    }
+
+</script>
+</body>
+</html>
+
+</template>
+
+  <!-- JAVASCRIPT CONTROLLER -->
+  <script>
+    const DEVICES = {
+      iphone: {
+        name: 'Apple iPhone 16 Pro',
+        tag: 'iPhone 16 Pro · 393 × 852 pt',
+        w: 393,
+        h: 852,
+        chassisClass: 'chassis-iphone',
+        cutoutClass: 'dynamic-island',
+        hasChrome: false
+      },
+      samsung: {
+        name: 'Samsung Galaxy S24',
+        tag: 'Samsung S24 · 412 × 915 px',
+        w: 412,
+        h: 915,
+        chassisClass: 'chassis-samsung',
+        cutoutClass: 'punch-hole',
+        hasChrome: false
+      },
+      tablet: {
+        name: 'Apple iPad Pro 11"',
+        tag: 'iPad Pro 11" · 834 × 1194 pt',
+        w: 834,
+        h: 1194,
+        chassisClass: 'chassis-tablet',
+        cutoutClass: '',
+        hasChrome: false
+      },
+      desktop: {
+        name: 'Desktop (1280 × 800 Display)',
+        tag: 'Desktop · 1280 × 800 px',
+        w: 1280,
+        h: 800,
+        chassisClass: 'chassis-desktop',
+        cutoutClass: '',
+        hasChrome: true
+      }
+    };
+
+    let activeDevice = 'iphone';
+    let isLandscape = false;
+    let scaleMode = 'fit';
+
+    const stage = document.getElementById('stage');
+    const singleView = document.getElementById('single-view-container');
+    const allGridView = document.getElementById('all-grid-container');
+    const scalerWrapper = document.getElementById('scaler-wrapper');
+    const deviceChassis = document.getElementById('device-chassis');
+    const cutoutElement = document.getElementById('cutout-element');
+    const desktopChrome = document.getElementById('desktop-chrome-bar');
+    const mainFrame = document.getElementById('main-preview-frame');
+    const dimensionBadge = document.getElementById('dimension-badge');
+    const footerName = document.getElementById('footer-device-name');
+    const footerRes = document.getElementById('footer-device-res');
+    const footerScale = document.getElementById('footer-device-scale');
+    const orientationLabel = document.getElementById('orientation-label');
+
+    function initFrames() {
+      const template = document.getElementById('preview-app-template');
+      if (!template) return;
+      const htmlContent = template.innerHTML;
+
+      if (mainFrame) {
+        mainFrame.srcdoc = htmlContent;
+      }
+
+      document.querySelectorAll('.grid-preview-frame').forEach(frame => {
+        frame.srcdoc = htmlContent;
+      });
+    }
+
+    function switchDevice(deviceKey) {
+      ['iphone', 'samsung', 'tablet', 'desktop', 'all'].forEach(k => {
+        const btn = document.getElementById('tab-' + k);
+        if (!btn) return;
+        if (k === deviceKey) {
+          btn.className = 'px-3 py-1 rounded-full bg-white text-black font-semibold transition-colors';
+        } else {
+          btn.className = 'px-3 py-1 rounded-full text-white/70 hover:text-white transition-colors';
+        }
+      });
+
+      if (deviceKey === 'all') {
+        singleView.classList.add('hidden');
+        allGridView.classList.remove('hidden');
+        dimensionBadge.innerText = 'Side-by-Side Comparison';
+        return;
+      }
+
+      singleView.classList.remove('hidden');
+      allGridView.classList.add('hidden');
+      activeDevice = deviceKey;
+
+      updateDeviceView();
+    }
+
+    function updateDeviceView() {
+      const dev = DEVICES[activeDevice];
+      if (!dev) return;
+
+      const baseW = isLandscape && activeDevice !== 'desktop' ? dev.h : dev.w;
+      const baseH = isLandscape && activeDevice !== 'desktop' ? dev.w : dev.h;
+      const totalH = dev.hasChrome ? baseH + 38 : baseH;
+
+      deviceChassis.className = 'device-chassis ' + dev.chassisClass;
+      deviceChassis.style.width = baseW + 'px';
+      deviceChassis.style.height = totalH + 'px';
+
+      if (dev.cutoutClass && !isLandscape) {
+        cutoutElement.className = dev.cutoutClass;
+        cutoutElement.style.display = 'block';
+      } else {
+        cutoutElement.style.display = 'none';
+      }
+
+      if (dev.hasChrome) {
+        desktopChrome.style.setProperty('display', 'flex', 'important');
+        mainFrame.style.height = 'calc(100% - 38px)';
+      } else {
+        desktopChrome.style.setProperty('display', 'none', 'important');
+        mainFrame.style.height = '100%';
+      }
+
+      dimensionBadge.innerText = dev.tag + (isLandscape && activeDevice !== 'desktop' ? ' (Landscape)' : '');
+      footerName.innerText = dev.name;
+      footerRes.innerText = baseW + ' × ' + baseH + ' ' + (activeDevice.includes('iphone') || activeDevice.includes('tablet') ? 'pt' : 'px');
+
+      applyScaling();
+    }
+
+    function applyScaling() {
+      if (activeDevice === 'all') return;
+
+      const dev = DEVICES[activeDevice];
+      const baseW = isLandscape && activeDevice !== 'desktop' ? dev.h : dev.w;
+      const baseH = isLandscape && activeDevice !== 'desktop' ? dev.w : dev.h;
+      const totalH = dev.hasChrome ? baseH + 38 : baseH;
+
+      const stageW = stage.clientWidth - 40;
+      const stageH = stage.clientHeight - 80;
+
+      let scale = 1.0;
+
+      if (scaleMode === 'fit') {
+        const scaleW = stageW / baseW;
+        const scaleH = stageH / totalH;
+        scale = Math.min(1.0, scaleW, scaleH);
+        scale = Math.max(0.3, scale);
+      } else if (scaleMode === '100') {
+        scale = 1.0;
+      } else if (scaleMode === '75') {
+        scale = 0.75;
+      } else if (scaleMode === '50') {
+        scale = 0.50;
+      }
+
+      deviceChassis.style.transform = 'scale(' + scale + ')';
+      scalerWrapper.style.width = Math.round(baseW * scale) + 'px';
+      scalerWrapper.style.height = Math.round(totalH * scale) + 'px';
+
+      footerScale.innerText = 'Scale: ' + Math.round(scale * 100) + '%';
+    }
+
+    function setScaleMode(mode) {
+      scaleMode = mode;
+      ['fit', '100', '75', '50'].forEach(m => {
+        const btn = document.getElementById('scale-btn-' + m);
+        if (!btn) return;
+        if (m === mode) {
+          btn.className = 'px-2.5 py-0.5 rounded-full bg-white text-black font-semibold transition-colors';
+        } else {
+          btn.className = 'px-2.5 py-0.5 rounded-full text-white/70 hover:text-white transition-colors';
+        }
+      });
+      applyScaling();
+    }
+
+    function toggleOrientation() {
+      if (activeDevice === 'desktop') return;
+      isLandscape = !isLandscape;
+      orientationLabel.innerText = isLandscape ? 'Landscape' : 'Portrait';
+      updateDeviceView();
+    }
+
+    function reloadPreview() {
+      initFrames();
+    }
+
+    window.addEventListener('resize', () => {
+      if (scaleMode === 'fit') applyScaling();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initFrames();
+      updateDeviceView();
+    });
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      initFrames();
+      updateDeviceView();
+    }
+  </script>
+</body>
+</html>
