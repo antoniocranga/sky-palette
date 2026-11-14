@@ -54,7 +54,18 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Check Cloudflare Deployment Secrets
+        id: cf-check
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::warning title=Deployment Skipped::CLOUDFLARE_API_TOKEN secret is not yet configured in GitHub repository secrets. Deployment skipped until secrets are provisioned."
+            echo "configured=false" >> $GITHUB_OUTPUT
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy Production Worker to Cloudflare
+        if: steps.cf-check.outputs.configured == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -16,13 +16,28 @@ import { OtelTracker } from './lib/telemetry';
 let cachedHtml: string | null = null;
 async function getHtmlText(): Promise<string> {
   if (!cachedHtml) {
-    const res = await fetch('https://raw.githubusercontent.com/antoniocranga/sky-palette/main/public/index.html', {
-      headers: { 'User-Agent': 'SkyPalette-Edge/1.0' }
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to load app interface from repository: ${res.status}`);
+    const urls = [
+      'https://cdn.jsdelivr.net/gh/antoniocranga/sky-palette@main/public/index.html',
+      'https://raw.githubusercontent.com/antoniocranga/sky-palette/main/public/index.html'
+    ];
+    let content: string | null = null;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'SkyPalette-Edge/1.0' }
+        });
+        if (res.ok) {
+          content = await res.text();
+          break;
+        }
+      } catch (err) {
+        console.warn(`[AppHtmlFetchWarning] Failed from ${url}:`, err);
+      }
     }
-    cachedHtml = await res.text();
+    if (!content) {
+      throw new Error('Failed to load app interface from distribution network.');
+    }
+    cachedHtml = content;
   }
   return cachedHtml;
 }
