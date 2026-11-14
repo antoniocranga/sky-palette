@@ -82,3 +82,16 @@ Thumbs.db
 !.vscode/extensions.json
 *.sublime-project
 *.sublime-workspace
+
+
+# 9. Local-Only Development & Prototype Files
+scripts/
+device-preview.html
+preview.html
+TASK-BREAKDOWN.md
+task-breakdown.md
+PRE-LAUNCH-CHECKLIST.md
+pre-launch-checklist.md
+SKY-PALETTE-SPEC.md
+sky-palette-spec.md
+*.local

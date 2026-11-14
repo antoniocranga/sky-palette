@@ -1,14 +1,15 @@
 {
   "name": "sky-palette",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "description": "Physical sky color engine and solar architecture calculating real-time 5-swatch atmospheric palettes from astronomical sun angles and meteorological cloud dynamics.",
   "scripts": {
     "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
     "build": "tsc --noEmit && esbuild src/index.ts --bundle --outfile=dist/worker.js --format=esm --target=es2022 --platform=browser --minify",
-    "deploy:staging": "wrangler deploy --env staging",
-    "deploy:production": "wrangler deploy --env production",
-    "audit:frontend": "node scripts/verify-frontend-checklist.js"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241112.0",
