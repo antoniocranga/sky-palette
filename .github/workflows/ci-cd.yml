@@ -45,8 +45,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers (Chromium + WebKit)
+        run: npx playwright install --with-deps chromium webkit
 
       - name: End-to-end tests (iPhone 15 Pro, iPad, desktop)
         run: npm run test:e2e
