@@ -1,0 +1,12 @@
+# Cloudflare Workers local dev environment secrets (.dev.vars)
+# Copy this to .dev.vars for local development with `wrangler dev`
+# NEVER commit the actual .dev.vars file to git!
+
+# Turnstile bot challenge secret (from Cloudflare Dashboard -> Turnstile)
+TURNSTILE_SECRET_KEY="0x4AAAAAA..."
+
+# Salt for hashing IP addresses (SHA-256) for privacy-preserving rate limiting
+IP_SALT="replace-with-a-random-salt-string"
+
+# Environment
+ENVIRONMENT="development"

@@ -288,6 +288,24 @@ flowchart TD
    - If fail → returns rejection reason to client.
 5. Clients query updated submissions directly with edge cache invalidation.
 
+### 4.3 Execution Boundaries (Server-Side vs. Client-Side Allocation)
+
+To preserve data integrity, prevent unauthorized manipulation, and ensure strict privacy and security on a public open-source project, execution responsibilities are divided strictly:
+
+| Domain | Execution Target | Rationale |
+|---|---|---|
+| **Authoritative Photo Moderation** | **Server-Side** (Cloudflare Workers AI `@cf/microsoft/resnet-50`) | Cannot be bypassed by modifying client code. Guarantees NSFW classification before storage. |
+| **Sky-Likeness Validation** | **Server-Side** (Cloudflare Workers Color Histogram) | Server verifies that the uploaded image actually depicts a sky before creating D1 record. |
+| **EXIF Sanitization & Scrubbing** | **Server-Side** (Cloudflare Workers Image Pipeline) | Strips precise GPS, camera serials, and device PII before storing in R2. |
+| **Object Storage Writes** | **Server-Side** (Cloudflare R2 `sky-photos`) | Zero direct client writes. Photos only stored after moderation passes. |
+| **Bot Protection & Turnstile** | **Server-Side** (Cloudflare Siteverify) | Secret key `TURNSTILE_SECRET_KEY` validated server-side. |
+| **Abuse Mitigation & Rate Limiting** | **Server-Side** (Cloudflare Workers + SHA-256 `IP_SALT`) | Hashes IP addresses server-side with secret salt (5 uploads/hour/hash). Raw IPs never stored. |
+| **Database Queries & Writes** | **Server-Side** (Cloudflare D1 `sky-palette-db`) | Parameterized queries via Worker binding `env.DB`. No SQL client or credentials exposed. |
+| **Canonical Palette Generation** | **Server-Side** (Cloudflare Workers + D1 Cache) | Authoritative generation from Open-Meteo weather parameters, cached in D1 `daily_palettes`. |
+| **Dynamic Open Graph Images** | **Server-Side** (Cloudflare Workers `/api/og`) | Generates social preview cards at edge. |
+| **Interactive Scrubber (60fps)** | **Client-Side** (WebGL / Canvas + SunCalc) | Instant, zero-latency physical gradient and astronomical calculation during user drag. |
+| **Instant UI Pre-Validation** | **Client-Side** (Browser Canvas) | Instant feedback on image aspect ratio and file size (<25MB) prior to network upload. |
+
 ---
 
 ## 5. Database Schema (Cloudflare D1 SQLite)
