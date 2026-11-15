@@ -659,7 +659,7 @@
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
               </svg>
-              <span class="time-seg is-selected" data-time-hour aria-label="Hour">—</span>
+              <span class="time-seg" data-time-hour aria-label="Hour">—</span>
               <span class="time-colon" aria-hidden="true">:</span>
               <span class="time-seg" data-time-minute aria-label="Minute">—</span>
               <span id="submit-time-day" class="time-day">Nov 15</span>
@@ -668,15 +668,15 @@
           </div>
 
           <!-- Contributor Handle -->
-          <div id="submit-handle-field" class="field-shell w-full justify-between gap-2 text-xs">
+          <div id="submit-handle-field" class="field-shell submit-handle-field w-full gap-2 text-xs">
             <div class="flex items-center gap-2 min-w-0 flex-1">
               <svg class="w-4 h-4 text-neutral-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20.59 13.41 12 22H2v-10L10.59 2.59a2 2 0 0 1 2.82 0l7.18 7.18a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/></svg>
               <input id="submit-handle-input" aria-label="Tag" readonly autocomplete="off" spellcheck="false" class="field-input min-h-11" value="—" />
             </div>
-            <span id="submit-handle-edit" aria-hidden="true" class="pointer-events-none ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-neutral-400">
+            <span id="handle-status" role="status" aria-live="polite" class="handle-status shrink-0 text-[10px] text-neutral-500"></span>
+            <span id="submit-handle-edit" aria-hidden="true" class="handle-edit pointer-events-none text-neutral-400">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </span>
-            <span id="handle-status" role="status" aria-live="polite" class="shrink-0 text-[10px] text-neutral-500"></span>
           </div>
         </div>
 

@@ -2,7 +2,7 @@
  * Inline time drum used by the submit form.
  *
  * The two segment buttons stay as the field summary; tapping either opens a
- * vertical scroll-snap drum (hour, minute, day) inside the field wrapper. No
+ * transform-driven wheel (hour, minute, day) inside the field wrapper. No
  * modal or native time input is involved.
  */
 
@@ -21,7 +21,27 @@ export interface TimeStepperOptions {
 
 type WheelKey = "hour" | "minute" | "day";
 
+interface ColumnState {
+  element: HTMLElement;
+  track: HTMLElement;
+  items: HTMLElement[];
+  offset: number;
+}
+
+interface DragState {
+  startY: number;
+  startOffset: number;
+  lastOffset: number;
+  lastTime: number;
+  velocity: number;
+  moved: number;
+}
+
 const ITEM_HEIGHT = 40;
+const RUBBER_BAND = 0.35;
+const FLING_DISTANCE = 80;
+const FLING_VELOCITY = 0.9;
+const FLING_PROJECTION_MS = 180;
 const reducedMotion = (): boolean =>
   typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -32,18 +52,16 @@ export class TimeStepper {
   private readonly onChange: TimeStepperOptions["onChange"];
   private readonly onDayChange: TimeStepperOptions["onDayChange"];
   private readonly wheel: HTMLElement;
-  private readonly columns = new Map<WheelKey, { element: HTMLElement; items: HTMLElement[] }>();
-  private readonly scrollLocks = new Map<WheelKey, ReturnType<typeof setTimeout>>();
-  private readonly dragging = new Map<
-    WheelKey,
-    { startY: number; startTop: number; lastY: number; lastTime: number; velocity: number; moved: number; track: HTMLElement }
-  >();
+  private readonly columns = new Map<WheelKey, ColumnState>();
+  private readonly animations = new Map<WheelKey, number>();
+  private readonly pending = new Map<WheelKey, { index: number; commit: boolean }>();
+  private readonly drags = new Map<WheelKey, DragState>();
+  private readonly suppressClick = new Map<WheelKey, number>();
   private days: TimeWheelDay[] = [];
   private dayValue = "";
   private dayLabel = "Today";
   private dayAriaLabel = "today";
   private dayAria = "";
-  private selected: "hour" | "minute" = "hour";
   private hours: number;
   private minutes: number;
   private open = false;
@@ -79,8 +97,6 @@ export class TimeStepper {
     root.addEventListener("click", (event) => {
       const target = event.target;
       if (target instanceof Element && target.closest("#submit-date-trigger")) return;
-      this.selected = "hour";
-      this.paint();
       this.openWheel("hour");
     });
     root.addEventListener("keydown", (event) => this.onFieldKey(event));
@@ -109,6 +125,10 @@ export class TimeStepper {
     this.hours = clamp(Math.round(hours), 0, 23);
     this.minutes = clamp(Math.round(minutes), 0, 59);
     this.paint();
+    if (this.open) {
+      this.snapToIndex("hour", this.hours);
+      this.snapToIndex("minute", this.minutes);
+    }
     this.paintWheel();
   }
 
@@ -128,6 +148,7 @@ export class TimeStepper {
   setDay(value: string): void {
     if (!this.days.some((day) => day.value === value)) return;
     this.dayValue = value;
+    if (this.open) this.snapToIndex("day", this.indexFor("day"));
     this.paintWheel();
   }
 
@@ -146,6 +167,15 @@ export class TimeStepper {
   closeWheel(): void {
     if (!this.open) return;
     this.open = false;
+    for (const [key, pending] of [...this.pending]) {
+      this.stopAnimation(key);
+      this.setOffset(key, -pending.index * ITEM_HEIGHT);
+      if (pending.commit) this.commit(key, pending.index);
+    }
+    this.pending.clear();
+    for (const key of [...this.animations.keys()]) this.stopAnimation(key);
+    for (const entry of this.columns.values()) entry.element.classList.remove("is-dragging");
+    this.drags.clear();
     this.wheel.hidden = true;
     document.removeEventListener("pointerdown", this.onDocumentPointer, true);
     document.removeEventListener("keydown", this.onDocumentKey, true);
@@ -163,10 +193,9 @@ export class TimeStepper {
     track.className = "time-wheel-track";
     column.appendChild(track);
     this.wheel.appendChild(column);
-    const entry = { element: column, items: [] as HTMLElement[] };
+    const entry: ColumnState = { element: column, track, items: [], offset: 0 };
     this.columns.set(key, entry);
     this.fillColumn(entry, values, key);
-    column.addEventListener("scroll", () => this.onScroll(key), { passive: true });
     column.addEventListener("keydown", (event) => this.onWheelKey(event, key));
     column.addEventListener("pointerdown", (event) => this.onDragStart(key, event));
     column.addEventListener("pointermove", (event) => this.onDragMove(key, event));
@@ -174,9 +203,8 @@ export class TimeStepper {
     column.addEventListener("pointercancel", (event) => this.onDragEnd(key, event));
   }
 
-  private fillColumn(entry: { element: HTMLElement; items: HTMLElement[] }, values: TimeWheelDay[], key: WheelKey): void {
-    const track = entry.element.firstElementChild ?? entry.element;
-    track.replaceChildren();
+  private fillColumn(entry: ColumnState, values: TimeWheelDay[], key: WheelKey): void {
+    entry.track.replaceChildren();
     entry.items = values.map((item, index) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -185,23 +213,28 @@ export class TimeStepper {
       button.dataset.value = item.value;
       button.dataset.index = String(index);
       button.textContent = item.label;
-      button.addEventListener("click", () => this.scrollToIndex(key, index, true));
-      track.appendChild(button);
+      button.addEventListener("click", () => {
+        if ((this.suppressClick.get(key) ?? 0) > performance.now()) return;
+        this.animateToIndex(key, index, true);
+      });
+      entry.track.appendChild(button);
       return button;
     });
+    entry.offset = this.offsetForIndex(this.indexFor(key));
+    entry.track.style.transform = `translate3d(0, ${entry.offset}px, 0)`;
   }
 
-  private openWheel(key: "hour" | "minute"): void {
+  private openWheel(key: WheelKey): void {
+    const wasOpen = this.open;
     this.open = true;
     this.wheel.hidden = false;
     this.root.setAttribute("aria-expanded", "true");
-    document.addEventListener("pointerdown", this.onDocumentPointer, true);
-    document.addEventListener("keydown", this.onDocumentKey, true);
+    if (!wasOpen) {
+      document.addEventListener("pointerdown", this.onDocumentPointer, true);
+      document.addEventListener("keydown", this.onDocumentKey, true);
+    }
+    this.paintWheel();
     requestAnimationFrame(() => {
-      for (const name of ["hour", "minute", "day"] as const) {
-        this.scrollToIndex(name, this.indexFor(name), false);
-      }
-      this.paintWheel();
       this.columns.get(key)?.element.focus({ preventScroll: true });
     });
   }
@@ -227,34 +260,105 @@ export class TimeStepper {
     return Math.max(0, this.days.findIndex((day) => day.value === this.dayValue));
   }
 
-  private valueFor(key: WheelKey): string {
-    if (key === "hour") return String(this.hours);
-    if (key === "minute") return String(this.minutes);
-    return this.dayValue;
+  private offsetForIndex(index: number): number {
+    return -index * ITEM_HEIGHT;
   }
 
-  private scrollToIndex(key: WheelKey, index: number, smooth: boolean): void {
+  private minOffset(key: WheelKey): number {
     const entry = this.columns.get(key);
-    if (!entry) return;
-    const track = entry.element.firstElementChild;
-    if (track instanceof HTMLElement) track.style.transform = "";
-    const clamped = clamp(index, 0, Math.max(0, entry.items.length - 1));
-    const existing = this.scrollLocks.get(key);
-    if (existing) clearTimeout(existing);
-    this.scrollLocks.set(
-      key,
-      setTimeout(() => this.scrollLocks.delete(key), smooth && !reducedMotion() ? 520 : 0),
-    );
-    entry.element.scrollTo({ top: clamped * ITEM_HEIGHT, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
-    this.commit(key, clamped);
+    const count = entry?.items.length ?? 1;
+    return -Math.max(0, count - 1) * ITEM_HEIGHT;
   }
 
-  private onScroll(key: WheelKey): void {
-    if (this.scrollLocks.has(key) || this.dragging.has(key)) return;
+  private rubberBand(key: WheelKey, raw: number): number {
+    if (raw > 0) return raw * RUBBER_BAND;
+    const min = this.minOffset(key);
+    if (raw < min) return min + (raw - min) * RUBBER_BAND;
+    return raw;
+  }
+
+  private setOffset(key: WheelKey, offset: number): void {
     const entry = this.columns.get(key);
     if (!entry) return;
-    const index = clamp(Math.round(entry.element.scrollTop / ITEM_HEIGHT), 0, Math.max(0, entry.items.length - 1));
-    this.commit(key, index);
+    entry.offset = offset;
+    entry.track.style.transform = `translate3d(0, ${offset}px, 0)`;
+    const count = entry.items.length;
+    if (count === 0) return;
+    const nearest = clamp(Math.round(-offset / ITEM_HEIGHT), 0, count - 1);
+    entry.items.forEach((item, index) => {
+      const distance = Math.min(4, Math.abs(index - nearest));
+      const selected = distance === 0;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-selected", selected ? "true" : "false");
+      item.tabIndex = selected ? 0 : -1;
+      item.style.opacity = selected ? "1" : String(Math.max(0.22, 0.62 - (distance - 1) * 0.12));
+      item.style.transform = `scale(${selected ? 1 : Math.max(0.82, 1 - distance * 0.045)})`;
+    });
+  }
+
+  private snapToIndex(key: WheelKey, index: number): void {
+    const count = this.columns.get(key)?.items.length ?? 0;
+    if (count === 0) return;
+    const clamped = clamp(index, 0, count - 1);
+    this.stopAnimation(key);
+    this.pending.delete(key);
+    this.setOffset(key, -clamped * ITEM_HEIGHT);
+  }
+
+  private animateToIndex(key: WheelKey, index: number, commit: boolean): void {
+    const entry = this.columns.get(key);
+    if (!entry || entry.items.length === 0) return;
+    const clamped = clamp(index, 0, entry.items.length - 1);
+    const target = -clamped * ITEM_HEIGHT;
+    this.pending.set(key, { index: clamped, commit });
+    if (reducedMotion()) {
+      this.stopAnimation(key);
+      this.setOffset(key, target);
+      this.pending.delete(key);
+      if (commit) this.commit(key, clamped);
+      return;
+    }
+    const distance = Math.abs(target - entry.offset);
+    const duration = 280 + Math.min(140, distance * 0.6);
+    this.animateOffset(key, target, duration, () => {
+      this.pending.delete(key);
+      if (commit) this.commit(key, clamped);
+    });
+  }
+
+  private animateOffset(key: WheelKey, target: number, duration: number, done?: () => void): void {
+    this.stopAnimation(key);
+    const entry = this.columns.get(key);
+    if (!entry) {
+      done?.();
+      return;
+    }
+    const start = entry.offset;
+    if (Math.abs(target - start) < 0.5) {
+      this.setOffset(key, target);
+      done?.();
+      return;
+    }
+    const started = performance.now();
+    const frame = (now: number): void => {
+      const t = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      this.setOffset(key, start + (target - start) * eased);
+      if (t < 1) {
+        this.animations.set(key, requestAnimationFrame(frame));
+        return;
+      }
+      this.animations.delete(key);
+      this.setOffset(key, target);
+      done?.();
+    };
+    this.animations.set(key, requestAnimationFrame(frame));
+  }
+
+  private stopAnimation(key: WheelKey): void {
+    const frame = this.animations.get(key);
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    this.animations.delete(key);
   }
 
   private commit(key: WheelKey, index: number): void {
@@ -272,7 +376,6 @@ export class TimeStepper {
       const day = this.days[index];
       if (!day || day.value === this.dayValue) return;
       this.dayValue = day.value;
-      this.paintWheel();
       this.onDayChange?.(day.value);
     }
   }
@@ -280,74 +383,84 @@ export class TimeStepper {
   private onDragStart(key: WheelKey, event: PointerEvent): void {
     if (event.button !== 0 && event.pointerType === "mouse") return;
     const entry = this.columns.get(key);
-    const track = entry?.element.firstElementChild;
-    if (!entry || !(track instanceof HTMLElement)) return;
-    this.scrollLocks.delete(key);
-    for (const timer of this.scrollLocks.values()) clearTimeout(timer);
-    this.scrollLocks.clear();
-    this.dragging.set(key, {
+    if (!entry) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.stopAnimation(key);
+    this.suppressClick.delete(key);
+    entry.element.classList.add("is-dragging");
+    entry.element.setPointerCapture?.(event.pointerId);
+    entry.element.focus({ preventScroll: true });
+    const now = performance.now();
+    this.drags.set(key, {
       startY: event.clientY,
-      startTop: entry.element.scrollTop,
-      lastY: event.clientY,
-      lastTime: performance.now(),
+      startOffset: entry.offset,
+      lastOffset: entry.offset,
+      lastTime: now,
       velocity: 0,
       moved: 0,
-      track,
     });
-    entry.element.setPointerCapture?.(event.pointerId);
   }
 
   private onDragMove(key: WheelKey, event: PointerEvent): void {
-    const drag = this.dragging.get(key);
+    const drag = this.drags.get(key);
     const entry = this.columns.get(key);
     if (!drag || !entry) return;
     event.preventDefault();
+    event.stopPropagation();
     const dy = event.clientY - drag.startY;
     drag.moved = Math.max(drag.moved, Math.abs(dy));
+    const next = this.rubberBand(key, drag.startOffset + dy);
     const now = performance.now();
     const dt = Math.max(1, now - drag.lastTime);
-    drag.velocity = (drag.lastY - event.clientY) / dt;
-    drag.lastY = event.clientY;
+    const sample = (next - drag.lastOffset) / dt;
+    drag.velocity = drag.velocity * 0.3 + sample * 0.7;
+    drag.lastOffset = next;
     drag.lastTime = now;
-    const maxTop = Math.max(0, (entry.items.length - 1) * ITEM_HEIGHT);
-    const desired = drag.startTop - dy;
-    if (desired < 0) {
-      entry.element.scrollTop = 0;
-      drag.track.style.transform = `translateY(${desired * 0.35}px)`;
-    } else if (desired > maxTop) {
-      entry.element.scrollTop = maxTop;
-      drag.track.style.transform = `translateY(${(desired - maxTop) * 0.35}px)`;
-    } else {
-      entry.element.scrollTop = desired;
-      drag.track.style.transform = "";
-    }
-    const index = clamp(Math.round(entry.element.scrollTop / ITEM_HEIGHT), 0, entry.items.length - 1);
-    this.commit(key, index);
+    this.setOffset(key, next);
   }
 
   private onDragEnd(key: WheelKey, event: PointerEvent): void {
-    const drag = this.dragging.get(key);
+    const drag = this.drags.get(key);
     const entry = this.columns.get(key);
     if (!drag || !entry) return;
-    this.dragging.delete(key);
-    drag.track.style.transform = "";
-    entry.element.releasePointerCapture?.(event.pointerId);
-    const maxTop = Math.max(0, (entry.items.length - 1) * ITEM_HEIGHT);
-    const projected = entry.element.scrollTop - drag.velocity * 180;
-    const index = clamp(Math.round(projected / ITEM_HEIGHT), 0, Math.max(0, entry.items.length - 1));
-    this.scrollToIndex(key, index, true);
-    if (drag.moved < 3) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.drags.delete(key);
+    entry.element.classList.remove("is-dragging");
+    try {
+      entry.element.releasePointerCapture(event.pointerId);
+    } catch {
+      // pointer already released by the browser
+    }
+    const count = entry.items.length;
+    if (count === 0) return;
+    const idle = performance.now() - drag.lastTime;
+    const velocity = idle > 90 ? 0 : drag.velocity;
+    const rawIndex = -entry.offset / ITEM_HEIGHT;
+    const travelled = entry.offset - drag.startOffset;
+    let index = clamp(
+      travelled < -1 ? Math.floor(rawIndex) : travelled > 1 ? Math.ceil(rawIndex) : Math.round(rawIndex),
+      0,
+      count - 1,
+    );
+
+    if (event.type !== "pointercancel" && drag.moved < 3) {
       const row = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(".time-wheel-item");
       const rowIndex = row ? Number(row.dataset.index) : Number.NaN;
-      if (Number.isFinite(rowIndex)) this.scrollToIndex(key, rowIndex, true);
+      if (Number.isFinite(rowIndex)) index = clamp(rowIndex, 0, count - 1);
+      this.suppressClick.set(key, performance.now() + 300);
+    } else if (drag.moved >= FLING_DISTANCE && Math.abs(velocity) >= FLING_VELOCITY) {
+      const projected = entry.offset + velocity * FLING_PROJECTION_MS;
+      index = clamp(Math.round(-projected / ITEM_HEIGHT), 0, count - 1);
     }
-    void maxTop;
+    this.animateToIndex(key, index, true);
   }
 
   private onWheelKey(event: KeyboardEvent, key: WheelKey): void {
     const entry = this.columns.get(key);
     const items = entry?.items ?? [];
-    const current = this.indexFor(key);
+    const current = this.pending.get(key)?.index ?? this.indexFor(key);
     let next: number | null = null;
     switch (event.key) {
       case "ArrowUp":
@@ -386,17 +499,13 @@ export class TimeStepper {
         return;
     }
     event.preventDefault();
-    this.scrollToIndex(key, clamp(next, 0, items.length - 1), true);
+    this.animateToIndex(key, clamp(next, 0, items.length - 1), true);
   }
 
   private onFieldKey(event: KeyboardEvent): void {
     if (event.key === "Enter" || event.key === " " || event.key === "ArrowUp" || event.key === "ArrowDown") {
       event.preventDefault();
-      if (!this.open) {
-        this.selected = "hour";
-        this.paint();
-        this.openWheel("hour");
-      }
+      if (!this.open) this.openWheel("hour");
     }
   }
 
@@ -406,8 +515,6 @@ export class TimeStepper {
     this.hourButton.setAttribute("aria-label", `Hour ${pad(this.hours)}`);
     this.minuteButton.setAttribute("aria-label", `Minute ${pad(this.minutes)}`);
     this.root.setAttribute("aria-expanded", this.open ? "true" : "false");
-    this.hourButton.classList.toggle("is-selected", this.selected === "hour");
-    this.minuteButton.classList.toggle("is-selected", this.selected === "minute");
     this.root.dataset.value = `${pad(this.hours)}:${pad(this.minutes)}`;
     const spoken = `${pad(this.hours)}:${pad(this.minutes)}${this.dayAria ? `, ${this.dayAria}` : ""}`;
     this.root.setAttribute("aria-label", `Capture time, ${spoken}`);
@@ -420,16 +527,11 @@ export class TimeStepper {
     for (const key of ["hour", "minute", "day"] as const) {
       const entry = this.columns.get(key);
       if (!entry) continue;
-      const value = this.valueFor(key);
-      entry.items.forEach((item, index) => {
-        const selected = item.dataset.value === value || (key === "day" && !value && index === 0);
-        item.classList.toggle("is-selected", selected);
-        item.setAttribute("aria-selected", selected ? "true" : "false");
-        item.tabIndex = selected ? 0 : -1;
-      });
-      const selectedIndex = Math.max(0, this.indexFor(key));
-      if (this.open) {
-        entry.element.scrollTop = selectedIndex * ITEM_HEIGHT;
+      this.stopAnimation(key);
+      this.pending.delete(key);
+      if (entry.items.length > 0) {
+        const index = clamp(this.indexFor(key), 0, entry.items.length - 1);
+        this.setOffset(key, -index * ITEM_HEIGHT);
       }
     }
   }
@@ -456,3 +558,4 @@ function formatDay(value: string): string {
 function missingButton(name: string): HTMLButtonElement {
   throw new Error(`[Sky Palette] time stepper is missing its ${name} button`);
 }
+
