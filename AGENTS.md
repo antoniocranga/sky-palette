@@ -1,143 +1,66 @@
-# Sky Palette — Agent Instructions & Engineering Rules
+# Sky Palette — Agent Rules
 
-> **MANDATORY RULES FOR ALL AI AGENTS WORKING ON SKY PALETTE.**  
-> These instructions are active across all turns and prompts. Every agent must strictly adhere to the security, architectural, and server-side execution boundaries outlined below.
+> Applies to every AI agent and human contributor working in this repository.
+> This repository is public. Read the security section before writing anything.
 
----
+## 1. Secrets and privacy (non-negotiable)
 
-## 1. Security & Open-Source Zero Secrets Policy (CRITICAL)
+Never commit, print, or transmit:
 
-This repository is **public and open-source** on GitHub (`https://github.com/antoniocranga/sky-palette`).
+- Cloudflare API tokens, Global API keys, Turnstile secret keys, salts, or passwords.
+- Account ids, zone ids, database ids beyond what `wrangler.jsonc` requires to deploy.
+- Personal data: real names, personal email addresses, private URLs, absolute local paths.
+- Local state: `.env`, `.dev.vars`, `.wrangler/`, `.cloudflare/`, `node_modules/`, `dist/`.
 
-### 1.1 Strict Prohibition on Leaking Secrets & PII
-- **NEVER hardcode, print, commit, or push any of the following:**
-  - Cloudflare API tokens, Global API keys, or OAuth credentials.
-  - Cloudflare Account IDs (use runtime bindings or environment variables).
-  - Cloudflare Turnstile secret keys (`TURNSTILE_SECRET_KEY`).
-  - Private salts, encryption keys, or passwords.
-  - Personal identifiable information (real names, personal email addresses, private URLs).
-  - Absolute local machine paths (e.g., `/Users/...` or host system directories).
-  - Local environment files (`.env`, `.env.local`, `.dev.vars`, `.dev.vars.*`).
-  - Cloudflare/Wrangler local runtime state (`.wrangler/`, `.cloudflare/`).
-- **Secret Management:**
-  - Local development secrets belong strictly in `.dev.vars` (which is excluded by `.gitignore`).
-  - Production secrets must be provisioned via `wrangler secret put <KEY>` or Cloudflare Dashboard environment variables.
-  - Only template files (`.env.example`, `.dev.vars.example`) containing mock placeholders may be committed.
+Rules:
 
-### 1.2 Mandatory Pre-Commit Checklist
-Before executing any `git commit` or `git push`:
-1. Run `git status` to verify that only intended project files are staged.
-2. Verify that no `.env`, `.dev.vars`, `.wrangler/`, credentials, or personal files are present in the index.
-3. Check `git diff --cached` for any accidental secrets or hardcoded tokens.
+- Local secrets go in `.dev.vars` (git-ignored). Only `.dev.vars.example` is committed, with placeholders.
+- Production secrets are Worker secrets (`wrangler secret put`), never GitHub variables and never source.
+- Client IPs are hashed with `IP_SALT` before use. Never log or store a raw IP, a Turnstile token, or an uploaded file's bytes.
+- Before any commit: `git status`, then `git diff --cached` — confirm no secret, no local path, no generated artefact.
 
----
+## 2. Where code belongs
 
-## 2. Server-Side vs. Client-Side Execution Boundary
+| Path | Responsibility |
+|---|---|
+| `src/shared/` | Pure physics and contracts used by **both** Worker and browser: solar geometry, palette engine, colour, timezone math, shared types. No DOM, no `env`. |
+| `src/worker/` | Authoritative server: routing, validation, rate limits, weather ingestion, image validation/metadata stripping, D1, R2, Turnstile, logging. |
+| `src/client/` | Browser UI. May pre-compute with `src/shared/` for latency; must never be trusted for correctness. |
+| `migrations/` | D1 schema, one additive migration per change. |
+| `tests/unit`, `tests/worker`, `e2e` | Unit, integration (real bindings) and browser tests. |
+| `docs/` | Operations and architecture. |
 
-All authoritative operations, persistent storage, security checks, and machine learning moderation **MUST be computed server-side on Cloudflare infrastructure**.
+Do not duplicate solar or palette maths. Change `src/shared/` and both sides update.
 
-### 2.1 Server-Side Responsibilities (Cloudflare Workers & Edge Infrastructure)
-The following tasks **MUST NOT** be trusted to the client and must run inside Cloudflare Workers (`src/index.ts` / `api/*`):
-1. **Photo Moderation & Safety (Cloudflare Workers AI):**
-   - NSFW classification using `@cf/microsoft/resnet-50` or `@cf/meta/llama-guard-3-8b`.
-   - Authoritative sky-likeness verification (color histogram analysis) to prevent fake sky uploads.
-2. **EXIF Scrubbing & Image Transformation:**
-   - Stripping all camera metadata, device serials, and full GPS coordinates server-side before persisting photos.
-   - Resizing photos to maximum 1200px width and generating 300px square thumbnails.
-3. **Object Storage Uploads (Cloudflare R2):**
-   - Writing verified photos and thumbnails directly to Cloudflare R2 bucket `sky-photos` via the `PHOTOS` binding (`env.PHOTOS`).
-   - Serving community photos with zero egress bandwidth charges.
-4. **Turnstile Bot Verification:**
-   - Validating challenge tokens with Cloudflare Siteverify (`https://challenges.cloudflare.com/turnstile/v0/siteverify`) using `TURNSTILE_SECRET_KEY`.
-5. **Rate Limiting & Privacy-Preserving Abuse Prevention:**
-   - Hashing client IP addresses using SHA-256 combined with a secret server salt (`IP_SALT`). Raw IP addresses are **never** stored or logged.
-   - Enforcing 5 submissions per hour per hashed identifier.
-6. **Canonical Palette Computation & Database Persistence (Cloudflare D1):**
-   - Ingesting Open-Meteo weather parameters (low/mid/high cloud layers, visibility).
-   - Computing authoritative golden-hour palettes and storing them in D1 (`daily_palettes` table).
-   - Executing all database queries against D1 (`sky-palette-db`, UUID `5e1c6b54-4020-4e9b-a5d5-0cea27498741`) via prepared statements (`env.DB.prepare(...)`).
-7. **Dynamic Open Graph (OG) Images:**
-   - Generating server-side social share previews at edge (`/api/og`).
+## 3. Server-side boundary
 
-### 2.2 Client-Side Responsibilities (Browser UI / WebGL / Canvas)
-The client browser is strictly responsible for zero-latency, fluid user interactions:
-1. **Interactive Jog-Dial Scrubber (60-120fps):**
-   - Real-time solar position computation via client-side `SunCalc`.
-   - WebGL / Canvas Hosek-Wilkie / Preetham gradient rendering with zero network latency during scrubbing.
-   - Contrast engine adapting scrubber text and needles smoothly between white and black based on sky luminance.
-2. **Pre-Submission Heuristics:**
-   - Instant client-side validation of file type, dimensions, and basic color palette to provide instantaneous UX feedback before initiating upload.
-3. **Local UI State & Navigation:**
-   - Search autocomplete filtering via Fuse.js.
-   - Zero-cookie state management (in-memory only).
+The Worker owns and must validate: lat/lon/date/time parsing, rate limiting, Turnstile verification, file type and dimensions, metadata stripping, palette computation, D1 writes, R2 writes, and error sanitisation.
 
----
+The client may: render, pre-compute a palette for scrubbing, downscale an image before upload (UX only, re-validated by the Worker), and hold ephemeral UI state.
 
-## 3. Cloudflare Infrastructure Reference
+## 4. Data rules
 
-| Service | Identifier / Binding | Purpose |
-|---|---|---|
-| **Production Domain** | `skypalette.app` | Cloudflare Zone `4df85ed776a09b6464a515af9549f7b4` |
-| **D1 Database** | `sky-palette-db`<br>`5e1c6b54-4020-4e9b-a5d5-0cea27498741` | Serverless SQLite in `EEUR` (OTP colo), bound as `env.DB` |
-| **R2 Storage** | `sky-photos` | Community sky photo storage ($0 egress), bound as `env.PHOTOS` |
-| **Workers AI** | `@cf/microsoft/resnet-50` | Server-side image moderation & NSFW filter |
-| **Turnstile** | `skypalette.app` widget | Zero-friction bot protection on submission endpoint |
-| **Web Analytics** | Cloudflare Web Analytics | 100% cookie-free Core Web Vitals telemetry |
+- Prepared statements only: `env.DB.prepare(...).bind(...)`.
+- Migrations are additive. Never edit an applied migration; add a new file.
+- R2 stays private. Photos are streamed through `GET /api/photos/*`.
+- Stored submission status is `pending` until a human reviews it. Do not claim automated moderation in the UI unless it exists.
 
----
+## 5. Client rules
 
-## 4. Multi-Model Engineering Division
+- No cookies, no sessionStorage, no fingerprinting. One `localStorage` key is allowed: `sky-palette.city`, holding only the chosen city slug (no coordinates, ids, timestamps, or tracking data). Anything else needs a policy change first.
+- No third-party runtime requests: bundle fonts, CSS and JS.
+- Build DOM from API data with `textContent` or escaped templates, never raw `innerHTML`.
+- Accessibility is a review gate: labels, keyboard paths, focus trap in dialogs, 44 px targets, `prefers-reduced-motion`.
+- Mobile first: layout in `dvh`, respect safe-area insets, and verify at 393×852.
 
-- **DeepSeek v4.1:**  
-  Owns all mathematics, physics, astronomy algorithms (SunCalc, Hosek-Wilkie, Preetham scattering equations), Cloudflare Workers backend APIs, D1 SQL queries, and server-side image processing.
-- **Gemini 3.8 Flash:**  
-  Owns all frontend UI, Tailwind CSS styling, responsive layout, component ergonomics, unslop aesthetic design, and DOM animations.
+## 6. Testing and release gate
 
----
+Every change ships with tests at the right level:
 
-## 5. Privacy & Data Ethics (Zero-Tracking Mandate)
+- Pure logic → `tests/unit` (Vitest).
+- Routes, D1, R2, Turnstile → `tests/worker` (`@cloudflare/vitest-plugin`, real bindings, mocked upstream).
+- User flows, responsive layout, a11y → `e2e` (Playwright + axe).
 
-- **100% Cookie-Free:** No session cookies, no tracking cookies, no cookie consent banners.
-- **Zero Fingerprinting:** Never generate device hashes, canvas fingerprints, or audio signatures.
-- **No User Accounts:** Completely anonymous exploration and photo submission with auto-generated animal/nature handles (`sky-bucharest-48b`).
-- **GDPR & ePrivacy Native Compliance:** By collecting zero PII and using cookie-free Cloudflare Web Analytics, the application is compliant by design without requiring cookie popups.
+The authoritative launch checklist is [`docs/PRE-LAUNCH.md`](docs/PRE-LAUNCH.md): every item is marked PASS/FAIL/N-A with evidence, and the 🔴 rows are blockers. Do not deploy a release while any blocker is open.
 
----
-
-## 6. Pre-Launch & Release Verification Checklist
-
-> Referenced from **The Front-End Checklist** (`https://mcp.frontendchecklist.io/` & `https://github.com/thedaviddias/front-end-checklist`).  
-> **Mandatory check on every code release and deployment.**
-
-### 6.1 Head & Metadata Architecture
-- [ ] `<!DOCTYPE html>` declared at root of document.
-- [ ] `<html lang="en">` declared with valid language tag.
-- [ ] `<meta charset="UTF-8">` placed in the first 1024 bytes of `<head>`.
-- [ ] Responsive viewport meta tag `<meta name="viewport" content="width=device-width, initial-scale=1.0">`.
-- [ ] Unique, descriptive `<title>` (under 65 characters) and `<meta name="description">` (120–160 characters).
-- [ ] Self-referencing canonical URL `<link rel="canonical" href="https://skypalette.app">`.
-- [ ] Open Graph protocol (`og:title`, `og:description`, `og:image`, `og:url`, `og:type`) and Twitter Cards (`summary_large_image`).
-- [ ] Schema.org structured data (`application/ld+json`) for `WebApplication`.
-- [ ] Favicon SVG and Apple Touch Icon declared without broken links.
-
-### 6.2 HTML & Accessibility (WCAG 2.2 AA)
-- [ ] Semantic HTML5 elements (`<header>`, `<main>`, `<footer>`, `<dialog>`, `<nav>`) properly nested.
-- [ ] All interactive buttons and inputs have accessible labels (`aria-label` or linked `<label for="">`).
-- [ ] Touch targets adhere to minimum 44×44px interactive bounding boxes.
-- [ ] Contrast engine maintains WCAG 2.2 AA compliance across all solar elevation angles using $C^1$ continuous Hermite interpolation.
-- [ ] Keyboard navigation supported with visible focus rings and Escape key dialog dismissals.
-
-### 6.3 Performance & Web Vitals
-- [ ] Web fonts optimized with `preconnect` and `font-display: swap`.
-- [ ] Modern CSS architecture (`calc()`, dynamic gradients, hardware-accelerated transforms).
-- [ ] Sub-second time-to-first-byte (TTFB) and instant interactive feedback on scrubber drag.
-- [ ] Zero layout shifts (CLS = 0) with predefined dimensions.
-
-### 6.4 Security, Edge & Privacy
-- [ ] Strict adherence to Section 1 Zero Secrets Policy (`git diff --cached` verified).
-- [ ] Local environment files (`.env`, `.dev.vars`, `*.local`) excluded in `.gitignore`.
-- [ ] Server-side execution boundaries strictly maintained (Workers, D1, R2).
-- [ ] Salted SHA-256 IP hashing for abuse rate limiting; zero raw IP addresses logged or stored.
-- [ ] Safe error responses (no stack traces, no internal database errors exposed to client).
-- [ ] OpenTelemetry traces and structured JSON logging active for production observability.
-- [ ] Automated tests pass 100% locally and in GitHub Actions CI/CD (`npm test`).
+Minimum gate for every release: `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e` green; no secrets in `git diff --cached`; migrations reviewed; `/api/health` healthy after deploy; load test shows 0×5xx and the upload quota holds (`npm run test:load`).

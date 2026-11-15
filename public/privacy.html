@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="index, follow" />
+    <title>Privacy — Sky Palette</title>
+    <meta name="description" content="What Sky Palette stores, where it is stored, and how to have a photo removed." />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #090b10; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; }
+      main { max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+      h1 { font-size: 1.6rem; margin: 0 0 .35rem; }
+      h2 { font-size: 1rem; margin: 2rem 0 .5rem; }
+      p, li { color: #cbd5e1; font-size: .95rem; }
+      a { color: #fca5a5; }
+      .muted { color: #94a3b8; font-size: .8rem; }
+      ul { padding-left: 1.2rem; }
+      code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; color: #e2e8f0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="muted"><a href="/">← Sky Palette</a></p>
+      <h1>Privacy</h1>
+      <p class="muted">Last updated 15 November 2026</p>
+
+      <p>Sky Palette is a small, anonymous tool. This page lists every piece of data it can store, without legal padding.</p>
+
+      <h2>What is stored when you browse</h2>
+      <ul>
+        <li><strong>No cookies</strong> and no tracking identifiers.</li>
+        <li><strong>One browser preference</strong>: the city slug you last chose, in <code>localStorage</code> under <code>sky-palette.city</code>. It contains only a slug such as <code>tokyo-japan</code>. Clearing site data removes it.</li>
+        <li><strong>Server logs</strong> record the request path, status, duration and a random request id. Query strings are redacted; raw IP addresses are not logged.</li>
+      </ul>
+
+      <h2>What is stored when you submit a photo</h2>
+      <ul>
+        <li>The photo itself, with camera metadata (EXIF, GPS, device) stripped on the server before it is written to storage.</li>
+        <li>The location label you choose and the coordinates used for the palette.</li>
+        <li>The capture time, the five computed colours, and your anonymous handle.</li>
+        <li>A salted SHA-256 hash of your IP address, used only to enforce the upload limit (5 per hour). The raw address is never stored.</li>
+        <li>A record that you confirmed the CC0 dedication, with a timestamp.</li>
+      </ul>
+
+      <h2>Where it lives</h2>
+      <p>Photos are stored in Cloudflare R2 and their records in Cloudflare D1, in Cloudflare's European region. The application runs on Cloudflare Workers. Weather data comes from Open-Meteo and is fetched by the server, not your browser.</p>
+
+      <h2>How long</h2>
+      <p>Approved photos stay published until you ask for removal. Pending or rejected photos are kept for moderation and are removed when rejected or deleted. Rate-limit counters are pruned automatically.</p>
+
+      <h2>Your control</h2>
+      <p>Write to <a href="https://github.com/antoniocranga/sky-palette/issues">the project issue tracker</a> with the photo URL or handle and ask for deletion. Deletion removes the image from storage and the database row; the request path then returns 404. No account is required.</p>
+
+      <h2>Licence</h2>
+      <p>Published photos are dedicated to the public domain under <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0 1.0</a>.</p>
+
+      <h2>Service providers</h2>
+      <p>Cloudflare (hosting, storage, Turnstile bot protection) and Open-Meteo (weather). Turnstile is used only on the upload form; it may set its own short-lived challenge state, governed by Cloudflare's privacy terms.</p>
+
+      <p class="muted">Questions: <a href="https://github.com/antoniocranga/sky-palette/issues">GitHub issues</a>.</p>
+    </main>
+  </body>
+</html>

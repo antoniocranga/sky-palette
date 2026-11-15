@@ -1,8 +1,9 @@
-# ------------------------------------------------------------------------------
-# Sky Palette - Security & Open Source Git Ignore
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Sky Palette — repository hygiene
+# This project is public. Nothing here may contain secrets or machine paths.
+# ---------------------------------------------------------------------------
 
-# 1. Environment Variables, Local Configuration & Secrets (CRITICAL)
+# Local secrets and environment (never commit real values)
 .env
 .env.*
 !.env.example
@@ -15,83 +16,58 @@
 *.crt
 *.pfx
 *.p12
-*.kdbx
 secrets/
 *.tfvars
 *.tfstate*
-.vault*
 
-# 2. Cloudflare, Wrangler & Miniflare
+# Cloudflare / Wrangler local state
 .wrangler/
 .cloudflare/
 .mf/
+.dev.vars.local
 
-# 3. Dependencies & Package Managers
+# Dependencies
 node_modules/
 .pnpm-store/
-.yarn/cache/
-.yarn/unplugged/
-.yarn/build-state.yml
-.yarn/install-state.gz
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
-# 4. Build Outputs & Caches
-.next/
+# Build output
 dist/
-out/
 build/
-.turbo/
+out/
 .cache/
-.parcel-cache/
+.turbo/
 
-# 5. Testing & Code Quality
+# Review artifacts (local screenshots, not part of the source tree)
+docs/assets/review/
+
+# Tests and reports
 coverage/
-.nyc_output/
 reports/
+playwright-report/
+test-results/
+blob-report/
 *.lcov
 
-# 6. Antigravity & AI Agent Tooling
+# Agent tooling (local only)
 .agents/
 .gemini/
 .claude/
 .cursor/
 scratch/
 
-# 7. Operating System & Editor Artifacts
+# Editors and OS
 .DS_Store
-.DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 *.swp
 *.swo
 *~
 *.bak
 *.tmp
 *.log
-
-# 8. IDEs
 .idea/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
-*.sublime-project
-*.sublime-workspace
 
-
-# 9. Local-Only Development & Prototype Files
-scripts/
-device-preview.html
-preview.html
-TASK-BREAKDOWN.md
-task-breakdown.md
-PRE-LAUNCH-CHECKLIST.md
-pre-launch-checklist.md
-SKY-PALETTE-SPEC.md
-sky-palette-spec.md
-*.local
+# TypeScript incremental state
+*.tsbuildinfo

@@ -1,0 +1,25 @@
+/* --------------------------------------------------------------------------
+   Modal scrim: instant, composited.
+   Kept in its own file so the blur can never be caught mid-fade: the shell
+   appears immediately, only the dialog card animates, and touch devices skip
+   the expensive backdrop-filter entirely.
+   -------------------------------------------------------------------------- */
+
+.modal-shell {
+  transition: none;
+}
+
+.modal-backdrop {
+  background-color: rgba(5, 7, 15, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: none;
+}
+
+@media (hover: none) {
+  .modal-backdrop {
+    background-color: rgba(5, 7, 15, 0.72);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
