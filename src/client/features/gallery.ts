@@ -99,7 +99,7 @@ export class GalleryFeature {
     try {
       const response = await getHistory(
         { lat: city.lat, lon: city.lon, days: this.days, timeZone: city.timezone },
-        { signal: this.controller.signal },
+        { signal: this.controller.signal, retry: () => void this.load(true) },
       );
       setHidden(this.skeleton, true);
       this.grid?.setAttribute("aria-busy", "false");

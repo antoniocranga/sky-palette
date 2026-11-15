@@ -16,6 +16,7 @@ import type {
   PaletteResponse,
   SubmissionResponse,
 } from "../shared/types";
+import { reportNetworkFailure, reportNetworkSuccess } from "./lib/network";
 
 export type ApiErrorCode = "http" | "network" | "timeout" | "aborted" | "invalid";
 
@@ -38,6 +39,8 @@ export type AppConfig = Omit<ConfigResponse, "success">;
 interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Re-runs the action behind this request when the user taps Retry. */
+  retry?: () => void;
 }
 
 export interface LocationMatch {
@@ -48,6 +51,9 @@ export interface LocationMatch {
 const DEFAULT_TIMEOUT_MS = 12_000;
 
 async function requestJson<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
+  // Failures are tracked per endpoint, so a success elsewhere (config, a cached
+  // palette) cannot hide the fact that this request is still unreachable.
+  const networkKey = path.split("?")[0] ?? path;
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let callerAborted = false;
@@ -104,6 +110,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}, options: Req
       throw new ApiError(failureMessage ?? "The sky service rejected the request.", response.status, "invalid", requestId);
     }
 
+    reportNetworkSuccess(networkKey);
     return payload as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -116,6 +123,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}, options: Req
       throw new ApiError("The sky service took too long to answer.", 0, "timeout");
     }
 
+    reportNetworkFailure(networkKey, options.retry ?? null);
     throw new ApiError("No network connection to the sky service.", 0, "network");
   } finally {
     clearTimeout(timer);

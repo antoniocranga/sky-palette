@@ -167,6 +167,8 @@ export interface TapeOptions {
   liveIndex?: number | null;
   /** Last reachable step. Home uses the current live step; detail uses 96. */
   maxIndex?: number;
+  /** Unique id for the green checkpoint (Home and detail each own one). */
+  liveDotId?: string;
 }
 
 export class Tape {
@@ -181,6 +183,7 @@ export class Tape {
   private readonly reducedMotion = prefersReducedMotion();
   private readonly ticks: HTMLElement[] = [];
   private readonly tickElements: HTMLElement[] = [];
+  private readonly liveDotId: string;
   private liveDot: HTMLElement | null = null;
   private liveIndexValue: number | null = null;
 
@@ -206,6 +209,7 @@ export class Tape {
     this.tape = options.tape;
     this.gap = options.gap ?? 14;
     this.stepCount = options.stepCount ?? STEPS_PER_DAY;
+    this.liveDotId = options.liveDotId ?? "ruler-live-dot";
     this.maxIndexValue = clamp(options.maxIndex ?? this.stepCount, 0, this.stepCount);
     this.max = this.maxIndexValue * this.gap;
     this.labelForIndex = options.labelForIndex ?? defaultLabel;
@@ -221,7 +225,6 @@ export class Tape {
     this.bind();
     if (options.liveIndex !== undefined) this.setLiveIndex(options.liveIndex);
     this.render(this.position, true, false);
-    this.viewport.setAttribute("aria-valuemax", String(this.stepCount * 15));
     this.setIndex(initial, { animate: false, silent: true });
   }
 
@@ -243,6 +246,7 @@ export class Tape {
     const next = clamp(Math.round(index), 0, this.stepCount);
     this.maxIndexValue = next;
     this.max = next * this.gap;
+    this.viewport.setAttribute("aria-valuemax", String(next * 15));
     this.tickElements.forEach((tick, tickIndex) => {
       const disabled = tickIndex > next;
       tick.classList.toggle("is-disabled", disabled);
@@ -265,13 +269,14 @@ export class Tape {
       this.liveDot?.remove();
       this.liveDot = null;
       this.liveIndexValue = null;
+      this.render(this.position, true, false);
       return;
     }
     const targetIndex = clamp(Math.round(index), 0, this.stepCount);
     this.liveIndexValue = targetIndex;
     if (!this.liveDot) {
       const dot = document.createElement("div");
-      dot.id = "ruler-live-dot";
+      dot.id = this.liveDotId;
       dot.className = "ruler-live-dot";
       dot.setAttribute("aria-hidden", "true");
       this.liveDot = dot;
@@ -283,6 +288,7 @@ export class Tape {
       tick.appendChild(this.liveDot);
       this.liveDot.style.top = "calc(50% + 15px)";
     }
+    this.render(this.position, true, false);
   }
 
   setTone(tone: "light" | "dark"): void {
@@ -564,8 +570,9 @@ export class Tape {
       const previousIndex = this.lastIndex;
       this.lastIndex = index;
       const label = this.labelForIndex(index);
+      const atLive = this.liveIndexValue !== null && index === this.liveIndexValue;
       this.viewport.setAttribute("aria-valuenow", String(index * 15));
-      this.viewport.setAttribute("aria-valuetext", label);
+      this.viewport.setAttribute("aria-valuetext", atLive ? `${label} · Live` : label);
       if (emit) this.emitInput();
 
       // Class state only changes when the centred index changes. Never size

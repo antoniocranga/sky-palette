@@ -418,11 +418,11 @@ function searchCities(query: string): City[] {
 }
 
 function galleryPhotos(): GalleryPhoto[] {
-  return Array.from({ length: 12 }, (_, index) => {
+  return Array.from({ length: 24 }, (_, index) => {
     const minute = 51 - index;
     return {
       id: `photo-${index + 1}`,
-      handle: index % 2 === 0 ? "sky-bucharest-48b" : "sky-bucharest-7af",
+      handle: index === 1 ? "sky-bucharest-extra8" : index % 2 === 0 ? "sky-bucharest-48b" : "sky-bucharest-7af",
       citySlug: "bucharest-romania",
       url: `/photos/full-${(index % 2) + 1}.svg`,
       thumbUrl: `/photos/thumb-${(index % 2) + 1}.svg`,
@@ -583,5 +583,6 @@ export async function openFirstDay(page: Page): Promise<void> {
   // No positional workaround: the centre of the tile must be tappable.
   await page.locator("#day-cards-grid .day-tile").first().click();
   await expect(page.locator("#screen-detail")).toHaveClass(/active/);
+  await expect(page.locator("#screen-detail")).toHaveCSS("opacity", "1");
   await expect(page.locator("#swatch-zenith")).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 }

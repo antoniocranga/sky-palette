@@ -59,6 +59,9 @@ async function assertTapTargets(page: import("@playwright/test").Page, rootSelec
       if (element.closest("[hidden]")) continue;
       const style = getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) continue;
+      // WCAG 2.5.8 inline exception: links that run inside a sentence are not
+      // standing alone as pointer targets.
+      if (element.tagName === "A" && style.display === "inline") continue;
       const rect = element.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
       if (rect.width < 43.5 || rect.height < 43.5) {
@@ -334,10 +337,14 @@ test.describe("responsive layout", () => {
     await assertLastTileClears("7-day");
 
     await openFirstDay(page);
-    await page.locator("#screen-detail").evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    await page.waitForTimeout(600);
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      if ((await page.locator("#detail-photos .photo-tile").count()) >= 24) break;
+      await page.locator("#screen-detail").evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await page.waitForTimeout(350);
+    }
+    await expect(page.locator("#detail-photos .photo-tile")).toHaveCount(24, { timeout: 10_000 });
     await page.locator("#screen-detail").evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });

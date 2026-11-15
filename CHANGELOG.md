@@ -4,6 +4,22 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+
+- **Community gallery**: three tiles per row at every width, vertical infinite scroll, hour-first tiles with `city` / `@handle` meta, brightness-only hover, and a zoom-in transition into the photo modal.
+- **Detail ruler**: follows the live sky like Home — today's tape stops at the current quarter-hour with a live checkpoint and badge; past days keep the full 00:00–24:00 range, and timelapse and phase jumps clamp to the bound.
+- **Share modal**: paper-airplane dock icon, scroll-to-top button matched to the Share button, fields share one typography, and closing no longer flashes the card.
+- **Footer**: one sentence with inline Privacy Policy, Terms and a Protected explanation instead of a separate row.
+- **Resilience**: skeleton rows during the first gallery load and every append; the offline toast carries a retry button and survives unrelated successful requests.
+- **iPhone**: sky backdrop and scrims cover the full visual viewport across the safe areas.
+
+### Fixed
+
+- Gallery pagination stopped after the second page when the sentinel stayed inside the scroller.
+- Contributor handles were truncated in three-column tiles.
+- A magenta artefact could appear under the colour preview while a photo loaded; the blurred hex placeholders are back, drawn without live text so the spell-checker cannot underline them.
+- The upload card kept a dashed outline after the borderless card was requested.
+
 ## [1.0.0] - 2026-11-14
 
 First public release. The preview-stage single-file mock is replaced by a working, tested application.
