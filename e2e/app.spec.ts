@@ -11,6 +11,80 @@ function rgbToHex(value: string): string {
   return `#${[match[1], match[2], match[3]].map((channel) => Number(channel).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
+
+type Rgb = [number, number, number];
+
+async function screenshotRaw(page: import("@playwright/test").Page): Promise<{ data: Buffer; width: number; height: number; channels: number }> {
+  const shot = await page.screenshot();
+  const { data, info } = await sharp(shot).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height, channels: info.channels };
+}
+
+async function assertNoPinkBand(page: import("@playwright/test").Page, selector: string): Promise<number> {
+  const box = await page.locator(selector).boundingBox();
+  expect(box, `${selector} must be laid out`).not.toBeNull();
+  if (!box) return 0;
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  if (!viewport) return 0;
+  const raw = await screenshotRaw(page);
+  const sx = raw.width / viewport.width;
+  const sy = raw.height / viewport.height;
+  const left = Math.max(0, Math.floor(box.x * sx));
+  const right = Math.min(raw.width, Math.ceil((box.x + box.width) * sx));
+  const top = Math.max(0, Math.floor(box.y * sy));
+  const bottom = Math.min(raw.height, Math.ceil((box.y + box.height) * sy));
+  let pink = 0;
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      const index = (y * raw.width + x) * raw.channels;
+      const r = raw.data[index] ?? 0;
+      const g = raw.data[index + 1] ?? 0;
+      const b = raw.data[index + 2] ?? 0;
+      if (r > 150 && b > 150 && g < Math.min(r, b) - 25) pink += 1;
+    }
+  }
+  return pink;
+}
+
+async function edgeAverage(page: import("@playwright/test").Page): Promise<{ top: Rgb; bottom: Rgb }> {
+  const raw = await screenshotRaw(page);
+  const sample = (row: number): Rgb => {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let x = 0; x < raw.width; x += 1) {
+      const index = (row * raw.width + x) * raw.channels;
+      r += raw.data[index] ?? 0;
+      g += raw.data[index + 1] ?? 0;
+      b += raw.data[index + 2] ?? 0;
+    }
+    return [Math.round(r / raw.width), Math.round(g / raw.width), Math.round(b / raw.width)];
+  };
+  const average = (start: number, end: number): Rgb => {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let rows = 0;
+    for (let y = start; y < end; y += 1) {
+      const [rr, gg, bb] = sample(y);
+      r += rr;
+      g += gg;
+      b += bb;
+      rows += 1;
+    }
+    return [Math.round(r / rows), Math.round(g / rows), Math.round(b / rows)];
+  };
+  return { top: average(0, Math.min(3, raw.height)), bottom: average(Math.max(0, raw.height - 3), raw.height) };
+}
+
+
+function minutesFromClock(value: string): number {
+  const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) return Number.NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
 async function checkViewport(page: import("@playwright/test").Page): Promise<void> {
   const metrics = await page.evaluate(() => ({
     scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
@@ -246,7 +320,7 @@ test.describe("Sky Palette app", () => {
     const y = box.y + box.height / 2;
     await page.mouse.move(box.x + box.width / 2, y);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 - 190, y, { steps: 12 });
+    await page.mouse.move(box.x + box.width / 2 + 190, y, { steps: 12 });
     await page.mouse.up();
 
     await expect(hex).not.toHaveText(before ?? "", { timeout: 5000 });
@@ -412,14 +486,14 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("body")).not.toHaveAttribute("data-booting", "true");
     await expect(page.locator("#screen-detail")).toHaveClass(/active/);
     await expect(page.locator("#detail-title")).toHaveText("Nov 14 · Bucharest");
-    await expect(page.locator("#detail-ruler-time-display")).toHaveText("16:49");
+    await expect(page.locator("#detail-ruler-time-display")).toHaveText("16:15");
     for (const name of ["zenith", "midsky", "horizon", "sunglow", "cloudtint"]) {
       await expect(page.locator(`#${name}-hex`)).toHaveText(/^#[0-9A-F]{6}$/);
     }
     const url = new URL(page.url());
     expect(url.searchParams.get("view")).toBe("detail");
     expect(url.searchParams.get("day")).toBe("2026-11-14");
-    expect(url.searchParams.get("time")).toBe("16:49");
+    expect(url.searchParams.get("time")).toBe("16:15");
   });
 
   test("browser Back restores gallery then home", async ({ page }) => {
@@ -559,7 +633,7 @@ test.describe("Sky Palette app", () => {
     expect(copied.searchParams.get("city")).toBe("bucharest-romania");
     expect(copied.searchParams.get("view")).toBe("detail");
     expect(copied.searchParams.get("day")).toBe("2026-11-14");
-    expect(copied.searchParams.get("time")).toBe("16:49");
+    expect(copied.searchParams.get("time")).toBe("16:15");
     expect(copied.searchParams.get("interval")).toBe("15");
   });
 
@@ -759,7 +833,7 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#photo-modal")).not.toHaveClass(/is-open/);
   });
 
-  test("community grid is three columns and paginates vertically", async ({ page }) => {
+  test("community grid is three columns and paginates to every page", async ({ page, api }) => {
     await gotoGallery(page);
     await openFirstDay(page);
     const grid = page.locator("#detail-photos");
@@ -769,11 +843,79 @@ test.describe("Sky Palette app", () => {
       expect(columns, `columns at ${width}`).toBe(3);
       await expect(grid).toHaveCSS("column-gap", "0px");
     }
-    expect(await page.locator("#detail-photos .photo-tile").count()).toBeGreaterThanOrEqual(6);
-    await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
-    await expect(page.locator("#detail-photos .photo-tile")).toHaveCount(12, { timeout: 10_000 });
-    const ids = await page.locator("#detail-photos .photo-tile").evaluateAll((elements) => elements.map((element) => element.getAttribute("data-photo-id")));
+    const tiles = page.locator("#detail-photos .photo-tile");
+    expect(await tiles.count()).toBeGreaterThanOrEqual(6);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      if ((await tiles.count()) >= 24) break;
+      await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(300);
+    }
+    await expect(tiles).toHaveCount(24, { timeout: 10_000 });
+    const ids = await tiles.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-photo-id")));
     expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBe(24);
+
+    const cursors = api.requests
+      .filter((request) => request.startsWith("GET /api/gallery?"))
+      .map((request) => new URL(request.slice(4), "http://local").searchParams.get("cursor"))
+      .filter((cursor): cursor is string => Boolean(cursor));
+    expect(cursors.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(cursors).size).toBe(cursors.length);
+  });
+
+  test("community tile keeps the full tag and stacks city then tag on phones", async ({ page }) => {
+    await gotoGallery(page);
+    await page.setViewportSize({ width: 393, height: 852 });
+    await openFirstDay(page);
+    const tile = page.locator("#detail-photos .photo-tile").filter({ hasText: "@sky-bucharest-extra8" }).first();
+    await expect(tile).toBeVisible();
+
+    const read = () =>
+      tile.evaluate((element) => {
+        const city = element.querySelector<HTMLElement>(".photo-tile-city");
+        const tag = element.querySelector<HTMLElement>(".photo-tile-tag");
+        if (!city || !tag) return null;
+        const tileRect = element.getBoundingClientRect();
+        const cityRect = city.getBoundingClientRect();
+        const tagRect = tag.getBoundingClientRect();
+        const style = getComputedStyle(element.querySelector<HTMLElement>(".photo-tile-location")!);
+        return {
+          city: city.textContent,
+          tag: tag.textContent,
+          tagScrollWidth: tag.scrollWidth,
+          tagClientWidth: tag.clientWidth,
+          tagLeft: tagRect.left,
+          tagRight: tagRect.right,
+          tileLeft: tileRect.left,
+          tileRight: tileRect.right,
+          cityTop: cityRect.top,
+          cityBottom: cityRect.bottom,
+          tagTop: tagRect.top,
+          direction: style.flexDirection,
+          separator: getComputedStyle(city, "::after").content,
+        };
+      });
+
+    const phone = await read();
+    expect(phone).not.toBeNull();
+    if (!phone) return;
+    expect(phone.city).toBe("Bucharest");
+    expect(phone.tag).toBe("@sky-bucharest-extra8");
+    expect(phone.tagScrollWidth).toBeLessThanOrEqual(phone.tagClientWidth);
+    expect(phone.tagLeft).toBeGreaterThanOrEqual(phone.tileLeft - 1);
+    expect(phone.tagRight).toBeLessThanOrEqual(phone.tileRight + 1);
+    expect(phone.direction).toBe("column");
+    expect(phone.tagTop).toBeGreaterThanOrEqual(phone.cityBottom - 1);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(200);
+    const wide = await read();
+    expect(wide).not.toBeNull();
+    if (!wide) return;
+    expect(wide.direction).toBe("row");
+    expect(Math.abs(wide.tagTop - wide.cityTop)).toBeLessThanOrEqual(1);
+    expect(wide.separator).toContain("·");
+    expect(wide.tagScrollWidth).toBeLessThanOrEqual(wide.tagClientWidth);
   });
 
   test("community tiles brighten on hover and the scroll-top button works", async ({ page }) => {
@@ -784,7 +926,7 @@ test.describe("Sky Palette app", () => {
     await tile.hover();
     await expect(tile).toHaveCSS("filter", "brightness(1.06)");
     const transform = await tile.evaluate((element) => getComputedStyle(element).transform);
-    expect(transform).not.toBe("none");
+    expect(transform).toBe("none");
 
     const detail = page.locator("#screen-detail");
     await page.setViewportSize({ width: 393, height: 500 });
@@ -2118,6 +2260,343 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#screen-home")).toHaveClass(/active/);
   });
 
+
+  test("submit palette band is free of pink pixels in Chromium and WebKit", async ({ page }) => {
+    const project = test.info().project.name;
+    test.skip(!["iphone-15-pro", "webkit-iphone-15-pro", "desktop"].includes(project), "visual pixel scan runs on Chromium and WebKit");
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+    await page.waitForTimeout(250);
+    expect(await assertNoPinkBand(page, "#submit-palette-empty"), "empty palette band").toBe(0);
+
+    await page.locator("#sky-file-input").setInputFiles({ name: "sky.png", mimeType: "image/png", buffer: GOOD_PNG });
+    await expect(page.locator("#submit-palette-result")).toBeVisible();
+    await expect.poll(async () => page.locator("#submit-color-0").textContent()).toMatch(/^#[0-9A-F]{6}$/);
+    await page.waitForTimeout(150);
+    expect(await assertNoPinkBand(page, "#submit-palette-result"), "resolved palette band").toBe(0);
+
+    const reset = await page.evaluate(() => {
+      const selectors = ["#submit-palette-empty", "#submit-palette-result", "#submit-palette-row"];
+      return selectors.map((selector) => {
+        const style = getComputedStyle(document.querySelector<HTMLElement>(selector)!);
+        return { selector, outline: style.outlineStyle, border: style.borderTopWidth, shadow: style.boxShadow };
+      });
+    });
+    for (const row of reset) {
+      expect(row.outline, `${row.selector} outline`).toBe("none");
+      expect(row.border, `${row.selector} border`).toBe("0px");
+      expect(row.shadow, `${row.selector} shadow`).toBe("none");
+    }
+  });
+
+  test("submit footer is one inline sentence with a described Protected tooltip", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+
+    const footer = page.locator("#submit-footer");
+    await expect(footer).toContainText("See the Privacy Policy and Terms · Protected");
+    const links = footer.locator("a");
+    await expect(links).toHaveCount(2);
+    const linkMetrics = await links.evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          display: style.display,
+          paddingLeft: style.paddingLeft,
+          paddingRight: style.paddingRight,
+          marginLeft: style.marginLeft,
+          marginRight: style.marginRight,
+          height: rect.height,
+          rects: element.getClientRects().length,
+        };
+      }),
+    );
+    for (const metric of linkMetrics) {
+      expect(metric.display).toBe("inline");
+      expect(metric.paddingLeft).toBe("0px");
+      expect(metric.paddingRight).toBe("0px");
+      expect(metric.marginLeft).toBe("0px");
+      expect(metric.marginRight).toBe("0px");
+      expect(metric.height).toBeLessThan(24);
+      expect(metric.rects).toBe(1);
+    }
+
+    const status = page.locator("#bot-status");
+    const tooltip = "Cloudflare Turnstile verifies that this submission comes from a human. It runs only when this dialog opens; no personal data is sent.";
+    await expect(status).toHaveAttribute("title", tooltip);
+    await expect(status).toHaveAttribute("aria-describedby", "turnstile-help");
+    await expect(page.locator("#turnstile-help")).toHaveText(tooltip);
+    await expect(status).toHaveCSS("display", "inline");
+    await expect(status.locator("svg")).toHaveCount(0);
+  });
+
+  test("time, tag and location pills share one type recipe and highlight on hover", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+
+    const recipe = (selector: string) =>
+      page.locator(selector).evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          family: style.fontFamily,
+          size: style.fontSize,
+          weight: style.fontWeight,
+          color: style.color,
+          spacing: style.letterSpacing,
+        };
+      });
+    const location = await recipe("#submit-location-input");
+    expect(await recipe("#submit-time-stepper [data-time-hour]")).toEqual(location);
+    expect(await recipe("#submit-time-stepper #submit-time-day")).toEqual(location);
+    expect(await recipe("#submit-handle-input")).toEqual(location);
+    expect(await recipe("#submit-time-stepper .time-colon")).toEqual(location);
+
+    await page.locator("#submit-time-stepper").hover();
+    await expect(page.locator("#submit-time-stepper")).toHaveCSS("background-color", "rgb(236, 236, 236)");
+    await page.locator("#submit-handle-field").hover();
+    await expect(page.locator("#submit-handle-field")).toHaveCSS("background-color", "rgb(236, 236, 236)");
+  });
+
+  test("share modal closes without a card-only frame", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#dock-share-btn").click();
+    await expect(page.locator("#share-modal")).toHaveClass(/is-open/);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#share-modal")).not.toHaveClass(/is-open/);
+    const styles = await page.evaluate(() => {
+      const card = document.querySelector<HTMLElement>("#share-modal .modal-card")!;
+      const active = document.querySelector<HTMLElement>("#share-modal .card-variant.is-active")!;
+      const shell = document.querySelector<HTMLElement>("#share-modal")!;
+      const cardStyle = getComputedStyle(card);
+      const variantStyle = getComputedStyle(active);
+      return {
+        cardVisibility: cardStyle.visibility,
+        cardOpacity: cardStyle.opacity,
+        cardTransition: cardStyle.transitionDuration,
+        variantVisibility: variantStyle.visibility,
+        shellVisibility: getComputedStyle(shell).visibility,
+      };
+    });
+    expect(styles.shellVisibility).toBe("hidden");
+    expect(styles.cardVisibility).toBe("hidden");
+    expect(styles.cardOpacity).toBe("0");
+    expect(styles.cardTransition).toBe("0s");
+    expect(styles.variantVisibility).toBe("hidden");
+  });
+
+  test("home suggestion row has no background in either tone", async ({ page }) => {
+    await gotoHome(page);
+    const backgrounds = await page.evaluate(() => {
+      const screen = document.querySelector<HTMLElement>("#screen-home")!;
+      const row = document.querySelector<HTMLElement>("#screen-home .home-suggest")!;
+      const values: Record<string, string> = {};
+      for (const tone of ["dark", "light"]) {
+        screen.dataset.tone = tone;
+        values[tone] = getComputedStyle(row).backgroundColor;
+      }
+      return values;
+    });
+    expect(backgrounds.dark).toBe("rgba(0, 0, 0, 0)");
+    expect(backgrounds.light).toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("safe areas stay continuous at 393x852", async ({ page }) => {
+    test.skip(page.viewportSize()?.width !== 393, "phone-only visual check");
+    await gotoGallery(page);
+    const gallery = await edgeAverage(page);
+    expect(gallery.top.every((channel) => channel < 70), `gallery top ${gallery.top.join(",")}`).toBe(true);
+    expect(gallery.bottom.every((channel) => channel < 70), `gallery bottom ${gallery.bottom.join(",")}`).toBe(true);
+
+    await openFirstDay(page);
+    await expect(page.locator("#screen-detail")).toHaveCSS("opacity", "1");
+    await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = 0; });
+    await page.waitForTimeout(120);
+    const detail = await edgeAverage(page);
+    expect(detail.top.every((channel) => channel > 200), `detail top ${detail.top.join(",")}`).toBe(true);
+    expect(detail.bottom.every((channel) => channel > 200), `detail bottom ${detail.bottom.join(",")}`).toBe(true);
+
+    const geometry = await page.evaluate(() => {
+      const backdrop = getComputedStyle(document.querySelector<HTMLElement>("#sky-backdrop")!);
+      const screens = Array.from(document.querySelectorAll<HTMLElement>(".app-screen")).map(
+        (screen) => getComputedStyle(screen).backgroundColor,
+      );
+      return {
+        top: backdrop.top,
+        left: backdrop.left,
+        height: Number.parseFloat(backdrop.height),
+        viewport: window.innerHeight,
+        screens,
+      };
+    });
+    expect(geometry.top).toBe("0px");
+    expect(geometry.left).toBe("0px");
+    expect(geometry.height).toBeGreaterThanOrEqual(geometry.viewport - 1);
+    expect(geometry.screens.every((color) => color === "rgba(0, 0, 0, 0)")).toBe(true);
+  });
+
+  test("network failure shows a retry toast that reruns the failed load", async ({ page }) => {
+    await gotoGallery(page);
+    const abortHistory = async (route: import("@playwright/test").Route): Promise<void> => { await route.abort("failed"); };
+    await page.route("**/api/history**", abortHistory);
+    await page.locator("#interval-trigger-btn").click();
+    await page.locator("#int-btn-30").click();
+    await expect(page.locator("#toast")).toContainText("Network unavailable", { timeout: 10_000 });
+    await expect(page.locator("#toast")).toHaveClass(/is-visible/);
+    await expect(page.locator("#toast-retry")).toBeVisible();
+
+    await page.unroute("**/api/history**", abortHistory);
+    await page.locator("#toast-retry").click();
+    await expect(page.locator("#day-cards-grid .day-tile")).toHaveCount(30, { timeout: 10_000 });
+    await expect(page.locator("#toast")).not.toHaveClass(/is-visible/);
+  });
+
+  test("an unrelated success does not hide the offline toast", async ({ page }) => {
+    await page.route("**/api/palette**", (route) => route.abort("failed"));
+    await gotoHome(page);
+    await expect(page.locator("#toast")).toContainText("Network unavailable", { timeout: 10_000 });
+
+    // The history request succeeds when the gallery opens; that must not clear
+    // the toast while /api/palette is still unreachable.
+    await page.locator("#nav-btn-gallery").click();
+    await expect(page.locator("#day-cards-grid .day-tile").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#toast")).toHaveClass(/is-visible/);
+    await expect(page.locator("#toast-retry")).toBeVisible();
+  });
+
+  test("the toast inverts against the surface behind it", async ({ page }) => {
+    await gotoGallery(page);
+    await page.route("**/api/history**", (route) => route.abort("failed"));
+    await page.locator("#interval-trigger-btn").click();
+    await page.locator("#int-btn-30").click();
+    await expect(page.locator("#toast")).toHaveClass(/is-visible/);
+
+    // Dark mosaic: white pill, dark ink.
+    await expect(page.locator("#toast")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(page.locator("#toast-msg")).toHaveCSS("color", "rgb(11, 13, 18)");
+
+    // Light dialog surface: the original black pill returns.
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+    await expect(page.locator("#toast")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(page.locator("#toast-msg")).toHaveCSS("color", "rgb(255, 255, 255)");
+  });
+
+  test("community skeleton shows on first load and while a page appends", async ({ page }) => {
+    test.skip(page.viewportSize()?.width !== 393, "phone review capture");
+    await gotoGallery(page);
+    let releasePage = (): void => {};
+    const pageGate = new Promise<void>((resolve) => { releasePage = resolve; });
+    const slowGallery = async (route: import("@playwright/test").Route): Promise<void> => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.has("cursor")) {
+        await pageGate;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+      await route.fallback();
+    };
+    await page.route("**/api/gallery**", slowGallery);
+    await page.locator("#day-cards-grid .day-tile").first().click();
+    await expect(page.locator("#screen-detail")).toHaveClass(/active/);
+    await expect(page.locator("#detail-photos-skeleton")).toBeVisible();
+    await expect(page.locator("#detail-photos .photo-tile")).toHaveCount(6, { timeout: 10_000 });
+    await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect(page.locator("#detail-photos-skeleton")).toBeVisible({ timeout: 8_000 });
+    await page.screenshot({ path: "docs/assets/review/loading-iphone.png" });
+    await page.unroute("**/api/gallery**", slowGallery);
+    releasePage();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      if ((await page.locator("#detail-photos .photo-tile").count()) >= 24) break;
+      await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(300);
+    }
+    await expect(page.locator("#detail-photos .photo-tile")).toHaveCount(24, { timeout: 10_000 });
+    await expect(page.locator("#detail-photos-skeleton")).toBeHidden();
+  });
+
+
+  test("detail ruler stops at live time today and reaches midnight on past days", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-14T17:05:00Z"));
+    await gotoGallery(page);
+    await openFirstDay(page);
+    const viewport = page.locator("#detail-ruler-viewport");
+    const display = page.locator("#detail-ruler-time-display");
+    const liveBadge = page.locator("#detail-live-badge");
+
+    await expect(viewport).toHaveAttribute("aria-valuemax", "1140");
+    const initial = await display.textContent();
+    expect(minutesFromClock(initial ?? ""), "initial hour on today").toBeLessThanOrEqual(1140);
+
+    await viewport.press("End");
+    await expect(display).toHaveText("19:00");
+    await expect(viewport).toHaveAttribute("aria-valuenow", "1140");
+    await expect(viewport).toHaveAttribute("aria-valuetext", /Live/);
+    await expect(liveBadge).toBeVisible();
+    await expect(page.locator("#detail-ruler-tape .ruler-live-dot")).toBeVisible();
+    await expect(page.locator("#detail-ruler-tape .ruler-tick.is-disabled")).toHaveCount(20);
+
+    await page.locator('#detail-ruler-tape .ruler-tick[data-index="90"]').click({ force: true });
+    await expect(display).toHaveText("19:00");
+
+    await viewport.press("ArrowLeft");
+    await expect(display).toHaveText("18:45");
+    await expect(liveBadge).toBeHidden();
+    await expect(viewport).toHaveAttribute("aria-valuetext", "18:45");
+
+    await page.locator('#screen-detail [data-action="nav"][data-screen="gallery"]').click();
+    await expect(page.locator("#screen-gallery")).toHaveClass(/active/);
+    await page.locator("#day-cards-grid .day-tile").nth(1).click();
+    await expect(page.locator("#screen-detail")).toHaveClass(/active/);
+    await expect(page.locator("#screen-detail")).toHaveCSS("opacity", "1");
+
+    await expect(viewport).toHaveAttribute("aria-valuemax", "1440");
+    await expect(liveBadge).toBeHidden();
+    await expect(page.locator("#detail-ruler-tape .ruler-live-dot")).toHaveCount(0);
+    await viewport.press("End");
+    await expect(viewport).toHaveAttribute("aria-valuenow", "1440");
+    await viewport.press("ArrowLeft");
+    await expect(display).toHaveText("23:45");
+
+    await page.locator('[data-action="detail-jump"][data-kind="sunset"]').click();
+    await expect(display).toHaveText("16:45");
+  });
+
+  test("detail timelapse stops at the live bound", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.clock.setFixedTime(new Date("2026-11-14T16:50:00Z"));
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#timelapse-btn").click();
+    await expect(page.locator("#detail-ruler-time-display")).toHaveText("18:45", { timeout: 5_000 });
+    await expect(page.locator("#timelapse-btn")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#detail-live-badge")).toBeVisible();
+    await expect(page.locator("#detail-ruler-viewport")).toHaveAttribute("aria-valuemax", "1125");
+  });
+
+  test("detail jump buttons beyond the live bound are disabled", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-14T04:05:00Z"));
+    await gotoGallery(page);
+    await openFirstDay(page);
+    const viewport = page.locator("#detail-ruler-viewport");
+    const display = page.locator("#detail-ruler-time-display");
+    await expect(viewport).toHaveAttribute("aria-valuemax", "360");
+    await expect(display).toHaveText("06:00");
+
+    const sunrise = page.locator('[data-action="detail-jump"][data-kind="sunrise"]');
+    const golden = page.locator('[data-action="detail-jump"][data-kind="golden"]');
+    const sunset = page.locator('[data-action="detail-jump"][data-kind="sunset"]');
+    for (const button of [sunrise, golden, sunset]) {
+      await expect(button).toHaveAttribute("aria-disabled", "true");
+      await expect(button).toHaveCSS("opacity", "0.38");
+    }
+    await sunrise.click({ force: true });
+    await expect(display).toHaveText("06:00");
+  });
+
   test("no horizontal overflow and the dock stays inside the viewport", async ({ page }) => {
     await gotoHome(page);
     await checkViewport(page);
@@ -2142,6 +2621,16 @@ test.describe("Sky Palette app", () => {
     await page.locator('[data-action="retry-gallery"]').click();
     await expect(page.locator("#gallery-error")).toBeHidden({ timeout: 10_000 });
     await expect(page.locator("#day-cards-grid .day-tile")).toHaveCount(15);
+  });
+
+  test("a palette outage shows only the retry toast, no inline card", async ({ page }) => {
+    await page.route("**/api/palette**", (route) => route.abort("failed"));
+    await page.goto("/");
+    await expect(page.locator("#toast")).toContainText("Network unavailable");
+    await expect(page.locator("#toast")).toHaveClass(/is-visible/);
+    await expect(page.locator("#toast-retry")).toBeVisible();
+    await expect(page.locator("#home-error")).toBeHidden();
+    await expect(page.locator("#home-elevation")).not.toHaveText("—");
   });
 
   test("palette failure shows a retryable model state", async ({ page, api }) => {

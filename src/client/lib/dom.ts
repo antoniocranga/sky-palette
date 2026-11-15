@@ -115,16 +115,69 @@ export function isAbortError(error: unknown): boolean {
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+function resetToastRetry(toast: HTMLElement): HTMLButtonElement | null {
+  const retry = qs<HTMLButtonElement>("#toast-retry");
+  toast.classList.remove("has-retry");
+  if (retry) {
+    retry.hidden = true;
+    retry.onclick = null;
+  }
+  return retry;
+}
+
+/**
+ * Toast contrast follows what is behind it: a white pill on the dark home sky
+ * and gallery mosaic, the black pill on the light detail and dialog surfaces.
+ */
+export function surfaceTone(): "dark" | "light" {
+  if (document.querySelector(".modal-shell.is-open")) return "light";
+  if (document.querySelector("#screen-gallery.active")) return "dark";
+  const home = document.querySelector<HTMLElement>("#screen-home.active");
+  if (home) return home.dataset.tone === "light" ? "light" : "dark";
+  return "light";
+}
+
+export function applyToastTone(): void {
+  const toast = qs("#toast");
+  if (toast) toast.dataset.surface = surfaceTone();
+}
+
 export function showToast(message: string, durationMs = 2400): void {
   const toast = qs("#toast");
   const label = qs("#toast-msg");
   if (!toast || !label) return;
+  applyToastTone();
+  resetToastRetry(toast);
   label.textContent = message;
   toast.classList.add("is-visible");
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toast.classList.remove("is-visible");
   }, durationMs);
+}
+
+/** Persistent top toast with a retry button; cleared by a successful request. */
+export function showRetryToast(message: string, retry: () => void): void {
+  const toast = qs("#toast");
+  const label = qs("#toast-msg");
+  const button = qs<HTMLButtonElement>("#toast-retry");
+  if (!toast || !label || !button) return;
+  applyToastTone();
+  if (toastTimer) clearTimeout(toastTimer);
+  label.textContent = message;
+  button.hidden = false;
+  button.onclick = () => {
+    hideRetryToast();
+    retry();
+  };
+  toast.classList.add("has-retry", "is-visible");
+}
+
+export function hideRetryToast(): void {
+  const toast = qs("#toast");
+  if (!toast) return;
+  resetToastRetry(toast);
+  toast.classList.remove("is-visible");
 }
 
 export async function copyText(text: string): Promise<boolean> {

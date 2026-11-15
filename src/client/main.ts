@@ -6,7 +6,7 @@ import "./styles.css";
 import "./modal-scrim.css";
 
 import { getCityBySlug, getConfig, searchCities, type AppConfig } from "./api";
-import { bindGlobalActions, qs, registerAction } from "./lib/dom";
+import { applyToastTone, bindGlobalActions, qs, registerAction } from "./lib/dom";
 import { ModalController } from "./lib/dom";
 import { HomeFeature } from "./features/home";
 import { GalleryFeature } from "./features/gallery";
@@ -137,6 +137,13 @@ export async function bootstrap(): Promise<void> {
 
   store.subscribeKey("screen", () => applyScreen());
   applyScreen();
+  // The toast pill inverts with the surface behind it; watch screen, modal and
+  // home-tone class/attribute changes instead of duplicating that state here.
+  new MutationObserver(() => applyToastTone()).observe(document.body, {
+    attributes: true,
+    attributeFilter: ["class", "data-tone"],
+    subtree: true,
+  });
 
   // Load the config in parallel; the page renders with defaults if it fails.
   void loadConfig();
@@ -161,7 +168,7 @@ export async function bootstrap(): Promise<void> {
 
 async function loadConfig(): Promise<AppConfig | null> {
   try {
-    const config = await getConfig();
+    const config = await getConfig({ retry: () => void loadConfig() });
     store.set({ config });
     return config;
   } catch {

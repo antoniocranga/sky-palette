@@ -190,7 +190,14 @@ export class HomeFeature {
     const clusterInk = control.suggestInk;
     this.screen.style.setProperty("--home-ink-top", clusterInk);
     this.screen.style.setProperty("--home-ink-bottom", clusterInk);
-    this.screen.style.setProperty("--home-suggest-ink", clusterInk);
+    // The suggested row sits lower than the location line; with no chip
+    // background it must sample the sky at its own position for contrast.
+    const suggestRow = qs<HTMLElement>("#screen-home .home-suggest");
+    const suggestFraction =
+      screenRect.height > 0 && suggestRow
+        ? Math.min(1, Math.max(0, (suggestRow.getBoundingClientRect().top + suggestRow.getBoundingClientRect().height / 2 - screenRect.top) / screenRect.height))
+        : fraction;
+    this.screen.style.setProperty("--home-suggest-ink", HOME_CONTROL_PALETTES[nextHomeToneAt(palette, suggestFraction)].suggestInk);
     const zenith = hexToRgb(palette.zenith);
     const sunglow = hexToRgb(palette.sunglow);
     // Fade to the same colour at zero alpha: fading to `transparent` would
@@ -228,7 +235,7 @@ export class HomeFeature {
     try {
       const response = await getPalette(
         { lat: city.lat, lon: city.lon, at: new Date(), timeZone: city.timezone },
-        { signal: this.controller.signal },
+        { signal: this.controller.signal, retry: () => void this.load() },
       );
       this.weather = response.weather;
       this.palette = response.palette;
@@ -282,7 +289,7 @@ export class HomeFeature {
       const instant = instantForLocalHour(this.dayIso, hour, city.timezone);
       const response = await getPalette(
         { lat: city.lat, lon: city.lon, at: instant, timeZone: city.timezone },
-        { signal: this.controller.signal },
+        { signal: this.controller.signal, retry: () => void this.fetchForHour(hour) },
       );
       if (fetchKey(this.dayIso, indexForHour(this.currentHour)) !== key) return;
       this.weather = response.weather;
@@ -359,12 +366,16 @@ export class HomeFeature {
   }
 
   private showError(error: ApiError): void {
+    // An outage is announced by the retry toast; an inline card would repeat it
+    // and cover the sky the app is still able to draw from the model.
+    if (error.code === "network") {
+      setHidden(this.errorBox, true);
+      return;
+    }
     const message =
-      error.code === "network"
-        ? "Live weather is unreachable. Showing the clear-sky model; values update when the connection returns."
-        : error.code === "timeout"
-          ? "The sky service took too long. Showing the clear-sky model."
-          : "Live weather could not be loaded. Showing the clear-sky model.";
+      error.code === "timeout"
+        ? "The sky service took too long. Showing the clear-sky model."
+        : "Live weather could not be loaded. Showing the clear-sky model.";
     setText(this.errorText, message);
     setHidden(this.errorBox, false);
   }
