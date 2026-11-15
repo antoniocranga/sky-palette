@@ -271,3 +271,15 @@ function rowToCity(row: CityRow): City {
     population: row.population,
   };
 }
+
+/** Exact slug lookup for deep links and the persisted city preference. */
+export async function getCityBySlug(slug: string, env: { DB: D1Database }): Promise<City | null> {
+  const row = await env.DB.prepare(
+    `SELECT slug, name, country, country_code, admin1, lat, lon, timezone, population
+       FROM cities
+      WHERE slug = ?`,
+  )
+    .bind(slug)
+    .first<CityRow>();
+  return row ? rowToCity(row) : null;
+}

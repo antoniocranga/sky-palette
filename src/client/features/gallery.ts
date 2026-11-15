@@ -187,9 +187,9 @@ export class GalleryFeature {
   }
 
   private updateCityBadge(city = store.state.city): void {
-    const suffix = city.slug === DEFAULT_CITY.slug ? "HQ" : city.countryCode ?? city.country;
+    const country = city.countryCode ?? city.country;
     const badge = qs("#gallery-city-badge");
-    const label = `${city.name} · ${suffix}`;
+    const label = city.slug === DEFAULT_CITY.slug ? city.name : `${city.name} · ${country}`;
     setText(badge, label);
     badge?.setAttribute("title", `${label} · ${formatCoordinate(city.lat, "lat", 1)}`);
     // Keep the visible city text inside the button's accessible name.

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Moderation — Sky Palette</title>
+    <style>
+      :root { color-scheme: dark; --bg: #090b10; --card: #12151d; --line: rgba(255,255,255,.1); --ink: #f8fafc; --muted: #94a3b8; --accent: #f97316; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--line); display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+      h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+      .muted { color: var(--muted); font-size: .8rem; }
+      main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+      form { display: flex; gap: .5rem; flex-wrap: wrap; }
+      input, select, button { font: inherit; min-height: 44px; border-radius: 9999px; border: 1px solid var(--line); background: #0f131b; color: var(--ink); padding: 0 1rem; }
+      input { flex: 1; min-width: 240px; }
+      button { cursor: pointer; background: var(--ink); color: #090b10; font-weight: 600; border: 0; }
+      button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+      button.danger { background: #7f1d1d; color: #fff; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+      article { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; overflow: hidden; display: flex; flex-direction: column; }
+      article img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #0b0d12; }
+      .body { padding: .85rem; display: flex; flex-direction: column; gap: .5rem; }
+      .row { display: flex; justify-content: space-between; gap: .5rem; font-size: .78rem; }
+      .row strong { font-weight: 600; }
+      .actions { display: flex; gap: .4rem; }
+      .actions button { min-height: 40px; padding: 0 .8rem; font-size: .78rem; flex: 1; }
+      .empty { margin-top: 2rem; color: var(--muted); }
+      [hidden] { display: none !important; }
+      #message { margin-top: 1rem; font-size: .82rem; color: var(--muted); }
+      #message.error { color: #fca5a5; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Sky Palette · moderation</h1>
+      <span class="muted">Token stays in this tab's memory only</span>
+    </header>
+    <main>
+      <form id="auth">
+        <label class="muted" for="token" style="align-self:center">Admin token</label>
+        <input id="token" type="password" autocomplete="off" spellcheck="false" required />
+        <select id="status" aria-label="Filter by status">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button type="submit">Load</button>
+      </form>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="grid" class="grid" aria-live="polite"></section>
+      <p id="empty" class="empty" hidden>No submissions for this status.</p>
+    </main>
+    <script src="/admin.js" defer></script>
+  </body>
+</html>

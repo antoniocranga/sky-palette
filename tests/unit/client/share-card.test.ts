@@ -79,3 +79,25 @@ describe("story content", () => {
     expect(content.site).toBe(SHARE_SITE);
   });
 });
+
+import { cardMetaText } from "../../../src/client/features/share";
+import type { ShareSnapshot } from "../../../src/client/state";
+
+describe("card handle meta", () => {
+  const snapshot = {
+    city: { slug: "bucharest-romania", name: "Bucharest", country: "Romania", countryCode: "RO", admin1: null, lat: 44.4, lon: 26.1, timezone: "Europe/Bucharest" },
+    palette: source.palette,
+    dateIso: source.dateIso,
+    timeLabel: source.timeLabel,
+    phase: source.phase,
+    elevation: source.elevation,
+    azimuth: source.azimuth,
+    cloudLabel: source.cloudLabel,
+    mode: "live",
+    sunsetLabel: "16:49",
+  } satisfies ShareSnapshot;
+
+  it.each(["studio", "telemetry", "horizon", "monolith"] as const)("%s artwork includes the tag", (style) => {
+    expect(cardMetaText(style, snapshot, "sky-bucharest-48b")).toContain("@sky-bucharest-48b");
+  });
+});

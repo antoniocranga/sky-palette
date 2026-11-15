@@ -219,7 +219,14 @@ export class ModalController {
     void this.card.offsetHeight;
     this.card.scrollTop = 0;
     this.root.scrollTop = 0;
-    for (const body of qsa<HTMLElement>(".modal-body", this.card)) body.scrollTop = 0;
+    for (const body of qsa<HTMLElement>(".modal-body", this.card)) {
+      // iOS Safari sometimes paints the header but leaves an overflow scroller
+      // blank after reopening. Toggle it once per open to force a fresh layer.
+      body.style.display = "none";
+      void body.offsetHeight;
+      body.style.display = "block";
+      body.scrollTop = 0;
+    }
 
     document.addEventListener("keydown", this.onKeyDown);
     this.card.addEventListener("focusout", this.onFocusOut);

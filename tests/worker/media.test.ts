@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SELF } from "cloudflare:test";
 import { computePalette } from "../../src/shared/palette";
 import type { GalleryResponse } from "../../src/shared/types";
-import { testEnv } from "./helpers";
+import { testEnv, withEnvVar } from "./helpers";
 
 const BASE = "https://skypalette.test";
 
@@ -49,35 +49,80 @@ async function seedSubmission(seed: SubmissionSeed): Promise<void> {
     .run();
 }
 
-describe("GET /api/photos/*", () => {
-  it("streams a stored photo with immutable caching", async () => {
-    await putPhoto("photos/2026/11/abc.jpg", "image/jpeg");
+const APPROVED_KEY = "photos/2026/11/11111111-1111-4111-8111-111111111111.jpg";
+const ETAG_KEY = "photos/2026/11/22222222-2222-4222-8222-222222222222.jpg";
+const PENDING_KEY = "photos/2026/11/33333333-3333-4333-8333-333333333333.jpg";
+const MISSING_KEY = "photos/2026/11/44444444-4444-4444-8444-444444444444.jpg";
 
-    const response = await SELF.fetch(`${BASE}/api/photos/photos/2026/11/abc.jpg`);
+async function seedPhoto(key: string, status: "approved" | "pending"): Promise<void> {
+  await putPhoto(key, "image/jpeg");
+  await seedSubmission({
+    id: crypto.randomUUID(),
+    handle: "sky-test",
+    key,
+    lat: 44.4268,
+    lon: 26.1025,
+    capturedAt: "2026-11-14T14:51:00.000Z",
+    status,
+  });
+}
+
+describe("GET /api/photos/*", () => {
+  it("streams an approved photo with immutable caching and image hardening", async () => {
+    await seedPhoto(APPROVED_KEY, "approved");
+
+    const response = await SELF.fetch(`${BASE}/api/photos/${APPROVED_KEY}`);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/jpeg");
     expect(response.headers.get("cache-control")).toContain("immutable");
     expect(response.headers.get("content-disposition")).toBe("inline");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("content-security-policy")).toContain("sandbox");
+    expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
     expect(response.headers.get("content-length")).toBe("4");
     expect(new Uint8Array(await response.arrayBuffer())).toHaveLength(4);
   });
 
   it("returns 304 when the etag matches", async () => {
-    await putPhoto("photos/2026/11/etag.jpg", "image/jpeg");
+    await seedPhoto(ETAG_KEY, "approved");
 
-    const first = await SELF.fetch(`${BASE}/api/photos/photos/2026/11/etag.jpg`);
+    const first = await SELF.fetch(`${BASE}/api/photos/${ETAG_KEY}`);
     const etag = first.headers.get("etag");
     expect(etag).toBeTruthy();
 
-    const second = await SELF.fetch(`${BASE}/api/photos/photos/2026/11/etag.jpg`, {
+    const second = await SELF.fetch(`${BASE}/api/photos/${ETAG_KEY}`, {
       headers: { "if-none-match": etag ?? "" },
     });
     expect(second.status).toBe(304);
   });
 
-  it("returns 404 for a missing object", async () => {
-    const response = await SELF.fetch(`${BASE}/api/photos/photos/2026/11/missing.jpg`);
+  it("hides a pending photo until it is approved", async () => {
+    await seedPhoto(PENDING_KEY, "pending");
+
+    const hidden = await SELF.fetch(`${BASE}/api/photos/${PENDING_KEY}`);
+    expect(hidden.status).toBe(404);
+    expect(await hidden.text()).not.toContain(PENDING_KEY);
+
+    await withEnvVar("ADMIN_TOKEN", "test-admin-token", async () => {
+      const visible = await SELF.fetch(`${BASE}/api/photos/${PENDING_KEY}`, {
+        headers: { authorization: "Bearer test-admin-token" },
+      });
+      expect(visible.status).toBe(200);
+      expect(visible.headers.get("cache-control")).toBe("no-store");
+    });
+  });
+
+  it("returns 404 for an approved row whose object is missing", async () => {
+    await seedSubmission({
+      id: crypto.randomUUID(),
+      handle: "sky-test",
+      key: MISSING_KEY,
+      lat: 44.4268,
+      lon: 26.1025,
+      capturedAt: "2026-11-14T14:51:00.000Z",
+      status: "approved",
+    });
+    const response = await SELF.fetch(`${BASE}/api/photos/${MISSING_KEY}`);
     expect(response.status).toBe(404);
   });
 
@@ -92,6 +137,40 @@ describe("GET /api/photos/*", () => {
   it("refuses path traversal", async () => {
     const response = await SELF.fetch(`${BASE}/api/photos/photos/%2E%2E%2F%2E%2E%2Fsecret.jpg`);
     expect(response.status).toBe(404);
+  });
+
+  it("paginates with a cursor and caps the page size", async () => {
+    for (let i = 0; i < 8; i += 1) {
+      await seedSubmission({
+        id: crypto.randomUUID(),
+        handle: `sky-page-${i}`,
+        key: `photos/2026/11/00000000-0000-4000-8000-0000000000${String(i).padStart(2, "0")}.jpg`,
+        lat: 44.4268,
+        lon: 26.1025,
+        capturedAt: `2026-11-${String(10 + i).padStart(2, "0")}T12:00:00.000Z`,
+        status: "approved",
+      });
+    }
+
+    const first = await SELF.fetch(`${BASE}/api/gallery?lat=44.4268&lon=26.1025&limit=3`);
+    const firstBody = (await first.json()) as GalleryResponse & { nextCursor: string | null };
+    expect(firstBody.photos).toHaveLength(3);
+    expect(firstBody.nextCursor).toBeTruthy();
+
+    const second = await SELF.fetch(
+      `${BASE}/api/gallery?lat=44.4268&lon=26.1025&limit=3&cursor=${encodeURIComponent(firstBody.nextCursor!)}`,
+    );
+    const secondBody = (await second.json()) as GalleryResponse & { nextCursor: string | null };
+    expect(secondBody.photos).toHaveLength(3);
+    expect(secondBody.photos.map((p) => p.id)).not.toEqual(firstBody.photos.map((p) => p.id));
+
+    const capped = await SELF.fetch(`${BASE}/api/gallery?lat=44.4268&lon=26.1025&limit=1000`);
+    expect(capped.status).toBe(200);
+    const cappedBody = (await capped.json()) as GalleryResponse;
+    expect(cappedBody.photos.length).toBeLessThanOrEqual(12);
+
+    const bad = await SELF.fetch(`${BASE}/api/gallery?lat=44.4268&lon=26.1025&cursor=not-a-date`);
+    expect(bad.status).toBe(400);
   });
 
   it("returns 404 when no key is given", async () => {
@@ -171,5 +250,57 @@ describe("GET /api/gallery", () => {
   it("rejects a radius beyond the allowed maximum", async () => {
     const response = await SELF.fetch(`${BASE}/api/gallery?lat=44&lon=26&radius=90`);
     expect(response.status).toBe(400);
+  });
+});
+
+describe("gallery ordering and photo metadata", () => {
+  it("orders by upload time, not capture time", async () => {
+    await seedSubmission({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      handle: "sky-old-upload",
+      key: APPROVED_KEY,
+      lat: 44.4268,
+      lon: 26.1025,
+      capturedAt: "2026-11-14T14:51:00.000Z",
+      status: "approved",
+    });
+    await seedSubmission({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      handle: "sky-new-upload",
+      key: ETAG_KEY,
+      lat: 44.4268,
+      lon: 26.1025,
+      capturedAt: "2026-11-01T14:51:00.000Z",
+      status: "approved",
+    });
+    await testEnv.DB.prepare("UPDATE submissions SET created_at = '2026-11-01T10:00:00.000Z' WHERE handle = 'sky-old-upload'").run();
+    await testEnv.DB.prepare("UPDATE submissions SET created_at = '2026-11-15T09:00:00.000Z' WHERE handle = 'sky-new-upload'").run();
+
+    const response = await SELF.fetch(`${BASE}/api/gallery?lat=44.4268&lon=26.1025`);
+    const body = (await response.json()) as GalleryResponse;
+    expect(body.photos[0]?.handle).toBe("sky-new-upload");
+    expect(body.photos[0]?.createdAt).toBe("2026-11-15T09:00:00.000Z");
+  });
+
+  it("serves one approved photo by id and hides pending ones", async () => {
+    await seedSubmission({
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      handle: "sky-meta",
+      key: APPROVED_KEY,
+      lat: 44.4268,
+      lon: 26.1025,
+      capturedAt: "2026-11-14T14:51:00.000Z",
+      status: "approved",
+    });
+
+    const ok = await SELF.fetch(`${BASE}/api/photo?id=cccccccc-cccc-4ccc-8ccc-cccccccccccc`);
+    expect(ok.status).toBe(200);
+    const body = (await ok.json()) as { photo: { handle: string; createdAt: string; citySlug: string | null } };
+    expect(body.photo.handle).toBe("sky-meta");
+    expect(body.photo.createdAt).toBeTruthy();
+    expect(body.photo.citySlug).toBe("bucharest-romania");
+
+    const bad = await SELF.fetch(`${BASE}/api/photo?id=nope`);
+    expect(bad.status).toBe(404);
   });
 });

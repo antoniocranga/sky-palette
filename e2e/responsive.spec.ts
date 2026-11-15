@@ -1,5 +1,5 @@
 import { test, expect, gotoGallery, gotoHome, openFirstDay } from "./fixtures";
-import { contrastRatio } from "../src/shared/color";
+import { contrastRatio, hexToRgb, mix, rgbToHex } from "../src/shared/color";
 import { homeBackdropColor } from "../src/client/lib/contrast";
 
 interface Box {
@@ -139,11 +139,16 @@ async function assertHeroContrast(page: import("@playwright/test").Page): Promis
       if (!element) return null;
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || rect.width === 0 || rect.height === 0) return null;
       return {
         selector,
         color: style.color,
         fontSize: Number.parseFloat(style.fontSize),
         fontWeight: Number(style.fontWeight),
+        surface: (() => {
+          const surface = element.closest<HTMLElement>(".home-suggest");
+          return surface ? getComputedStyle(surface).backgroundColor : "rgba(0, 0, 0, 0)";
+        })(),
         centerFraction: (rect.top + rect.height / 2 - screen.getBoundingClientRect().top) / screen.getBoundingClientRect().height,
       };
     });
@@ -162,7 +167,11 @@ async function assertHeroContrast(page: import("@playwright/test").Page): Promis
   if (!data) return;
   for (const item of data.items) {
     if (!item) continue;
-    const effective = homeBackdropColor(data.sky, item.centerFraction);
+    let effective = homeBackdropColor(data.sky, item.centerFraction);
+    const surface = parseColor(item.surface);
+    if (surface.alpha > 0) {
+      effective = rgbToHex(mix(hexToRgb(effective), hexToRgb(surface.color), surface.alpha));
+    }
     const ink = parseColor(item.color).color;
     const ratio = contrastRatio(ink, effective);
     const large = item.fontSize >= 24 || (item.fontWeight >= 700 && item.fontSize >= 18.66);
@@ -171,6 +180,12 @@ async function assertHeroContrast(page: import("@playwright/test").Page): Promis
 }
 
 test.describe("responsive layout", () => {
+  // Layout and contrast are checked against the same fixed sky as app.spec.ts,
+  // so a CI run at a different hour cannot move a palette near the AA edge.
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-14T14:15:00Z"));
+  });
+
   test("every screen: no overflow, dock and modal actions fit, 44px targets", async ({ page }) => {
     await gotoHome(page);
     await assertNoHorizontalOverflow(page);
@@ -322,7 +337,11 @@ test.describe("responsive layout", () => {
     await page.locator("#screen-detail").evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });
-    await page.waitForTimeout(180);
+    await page.waitForTimeout(600);
+    await page.locator("#screen-detail").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await page.waitForTimeout(150);
     const photos = await page.locator("#detail-photos-section").boundingBox();
     expect(photos, "detail community section").not.toBeNull();
     if (!photos) return;

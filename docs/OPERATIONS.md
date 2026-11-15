@@ -98,7 +98,7 @@ Dashboard → the zone → **SSL/TLS**:
 - Overview: **Full (strict)** is not needed (no origin); Cloudflare terminates TLS at the edge.
 - Edge Certificates: **Always Use HTTPS** on, **Automatic HTTPS Rewrites** on, **TLS 1.3** on, **Minimum TLS 1.2**, **HSTS** on with `max-age=15552000; includeSubDomains` (add `preload` only after you are sure).
 
-**Caching → Configuration**: Brotli on, Early Hints on. Add a **Cache Rule**: URI path starts with `/api/` → *Bypass cache*, except `GET /api/palette`, `GET /api/history`, `GET /api/og`, which set their own `Cache-Control` and are safe to cache at the edge.
+**Caching → Configuration**: Brotli on, Early Hints on. Add a **Cache Rule**: URI path starts with `/api/` → *Bypass cache*, except `GET /api/palette` and `GET /api/history`, which set their own `Cache-Control` and are safe to cache at the edge. Social previews use the static `/og-image.png`.
 
 **Security → WAF → Rate limiting rules** (defense in depth on top of the Worker limiter):
 

@@ -9,13 +9,14 @@
 import { ApiError, getPalette } from "../api";
 import { isAbortError, qs, registerAction, setHidden, setText } from "../lib/dom";
 import { formatElevation, formatPercent, instantForLocalHour, timeZoneAbbreviation, weatherSummary } from "../lib/format";
-import { HOME_CONTROL_PALETTES, homeTextColors, nextHomeTone, rulerTextColor, type HomeTone } from "../lib/contrast";
+import { HOME_CONTROL_PALETTES, homeBackdropColor, nextHomeToneAt, rulerTextColor, type HomeTone } from "../lib/contrast";
+import { hexToRgb } from "../lib/color";
 import { Tape, indexForHour } from "../lib/tape";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, fractionalHourInZone, isoDayInZone, parseClock } from "../../shared/time";
 import type { Palette, PaletteResponse } from "../../shared/types";
-import { DEFAULT_CITY, store, type AppCity } from "../state";
+import { store, type AppCity } from "../state";
 
 export class HomeFeature {
   private readonly screen: HTMLElement;
@@ -24,8 +25,7 @@ export class HomeFeature {
   private readonly tape: Tape;
   private readonly clock = qs("#bucharest-clock");
   private readonly cityLabel = qs("#home-city-label");
-  private readonly citySuffix = qs("#home-city-suffix");
-  private readonly modeBadge = qs("#home-mode-badge");
+  private readonly liveDot = qs("#home-live-dot");
   private readonly phase = qs("#home-phase");
   private readonly elevation = qs("#home-elevation");
   private readonly azimuth = qs("#home-azimuth");
@@ -82,6 +82,9 @@ export class HomeFeature {
 
     this.tape.setLiveIndex(this.liveIndex());
     this.tape.setMaxIndex(this.liveIndex());
+    // Paint a synchronous clear-sky model before any network request: the
+    // neutral #090b10 layer must never be the final home background.
+    this.applyTime(this.currentHour, "model");
     this.paintLiveClock();
     this.clockTimer = setInterval(() => this.paintLiveClock(), 15_000);
     void this.clockTimer;
@@ -95,7 +98,7 @@ export class HomeFeature {
     });
 
     store.subscribeKey("screen", (screen) => {
-      if (screen === "home" && this.hasLoaded) this.applyTime(this.currentHour, "scrub");
+      if (screen === "home") this.applyTime(this.currentHour, this.hasLoaded ? "scrub" : "model");
     });
 
     store.subscribeKey("city", (city) => {
@@ -125,6 +128,15 @@ export class HomeFeature {
   }
 
   /** Apply a shared `HH:MM` without ever passing the live bound. */
+  /** Tap Home while already Home: spring the tape back to the live step. */
+  returnToLive(): void {
+    const target = this.liveIndex();
+    if (this.tape.isSettledAt(target)) return;
+    this.currentHour = target * 0.25;
+    this.userScrubbed = false;
+    this.tape.setIndex(target, { animate: true });
+  }
+
   applyRouteTime(value: string | null): void {
     if (!value) return;
     const clock = parseClock(value);
@@ -141,8 +153,6 @@ export class HomeFeature {
 
   private updateChrome(city: AppCity): void {
     setText(this.cityLabel, city.name);
-    const suffix = city.slug === DEFAULT_CITY.slug ? "HQ" : city.countryCode ?? city.country;
-    setText(this.citySuffix, suffix);
     document.title = `${city.name} — Sky Palette`;
     this.paintLiveClock();
   }
@@ -154,7 +164,6 @@ export class HomeFeature {
 
   /** The header clock is always the city's wall clock, never the scrubber. */
   private paintLiveClock(): void {
-    if (!this.hasLoaded) return;
     const city = store.state.city;
     const now = new Date();
     const clock = clockInZone(now, city.timezone);
@@ -166,12 +175,30 @@ export class HomeFeature {
     if (this.hasLoaded) this.applyLiveBadge(this.currentHour);
   }
 
-  /** Invert the search pill, info button and suggested chips with hysteresis. */
+  /** One tone for the whole home cluster: location line, search and chips. */
   private applyControlTone(palette: Palette): void {
-    const tone = nextHomeTone(palette, this.tone);
+    const screenRect = this.screen.getBoundingClientRect();
+    const anchor = qs<HTMLElement>("#screen-home .home-ink")?.getBoundingClientRect();
+    const fraction =
+      screenRect.height > 0 && anchor
+        ? Math.min(1, Math.max(0, (anchor.top + anchor.height / 2 - screenRect.top) / screenRect.height))
+        : 0.42;
+    const tone = nextHomeToneAt(palette, fraction, this.tone);
     this.tone = tone;
     this.screen.dataset.tone = tone;
     const control = HOME_CONTROL_PALETTES[tone];
+    const clusterInk = control.suggestInk;
+    this.screen.style.setProperty("--home-ink-top", clusterInk);
+    this.screen.style.setProperty("--home-ink-bottom", clusterInk);
+    this.screen.style.setProperty("--home-suggest-ink", clusterInk);
+    const zenith = hexToRgb(palette.zenith);
+    const sunglow = hexToRgb(palette.sunglow);
+    // Fade to the same colour at zero alpha: fading to `transparent` would
+    // interpolate through transparent black and paint a grey band on bright skies.
+    document.body.style.setProperty("--home-scrim-top", `rgba(${zenith.r}, ${zenith.g}, ${zenith.b}, 0.92)`);
+    document.body.style.setProperty("--home-scrim-top-end", `rgba(${zenith.r}, ${zenith.g}, ${zenith.b}, 0)`);
+    document.body.style.setProperty("--home-scrim-bottom", `rgba(${sunglow.r}, ${sunglow.g}, ${sunglow.b}, 0.92)`);
+    document.body.style.setProperty("--home-scrim-bottom-end", `rgba(${sunglow.r}, ${sunglow.g}, ${sunglow.b}, 0)`);
     const style = this.screen.style;
     style.setProperty("--home-control-surface", control.surface);
     style.setProperty("--home-control-ink", control.surfaceInk);
@@ -189,14 +216,7 @@ export class HomeFeature {
     const atLive =
       Math.floor(hour / 0.25) === this.liveIndex() &&
       isoDayInZone(new Date(), store.state.city.timezone) === this.dayIso;
-    if (this.modeBadge) {
-      this.modeBadge.classList.toggle("is-visible", atLive);
-      this.modeBadge.setAttribute("aria-hidden", atLive ? "false" : "true");
-      if (atLive) {
-        this.modeBadge.dataset.mode = "live";
-        this.modeBadge.textContent = "live";
-      }
-    }
+    setHidden(this.liveDot, !atLive);
   }
 
   async load(): Promise<void> {
@@ -305,11 +325,6 @@ export class HomeFeature {
     const clock = clockInZone(instant, city.timezone);
     setText(this.timeDisplay, clock);
 
-    // Choose ink from the actual backdrop under the hero and add a scrim only
-    // when black or white alone cannot reach 4.5:1.
-    const colors = homeTextColors(palette);
-    this.screen.style.setProperty("--home-ink-top", colors.top);
-    this.screen.style.setProperty("--home-ink-bottom", colors.bottom);
     const rulerInk = rulerTextColor(palette);
     this.screen.style.setProperty("--ruler-ink", rulerInk);
     this.tape.setTone(rulerInk === "#FFFFFF" ? "dark" : "light");

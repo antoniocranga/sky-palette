@@ -16,5 +16,6 @@ export default defineConfig({
     include: ["tests/worker/**/*.test.ts"],
     setupFiles: ["./tests/worker/setup.ts"],
     reporters: ["default"],
+    fileParallelism: false,
   },
 });

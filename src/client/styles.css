@@ -141,6 +141,22 @@ textarea {
   background: linear-gradient(to top, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
 }
 
+body[data-screen="home"] #safe-top-scrim {
+  background: linear-gradient(to bottom, var(--home-scrim-top), var(--home-scrim-top-end, rgba(5, 7, 15, 0)));
+}
+
+body[data-screen="home"] #safe-bottom-scrim {
+  background: linear-gradient(to top, var(--home-scrim-bottom), var(--home-scrim-bottom-end, rgba(5, 7, 15, 0)));
+}
+
+body[data-screen="detail"] #safe-top-scrim {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+}
+
+body[data-screen="detail"] #safe-bottom-scrim {
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+}
+
 .app-screen.active {
   opacity: 1;
   visibility: visible;
@@ -167,6 +183,10 @@ textarea {
   --home-mode-live: #86efac;
   --home-mode-forecast: #fcd34d;
   --home-mode-border: rgba(255, 255, 255, 0.24);
+  --home-scrim-top: rgba(5, 7, 15, 0.92);
+  --home-scrim-top-end: rgba(5, 7, 15, 0);
+  --home-scrim-bottom: rgba(5, 7, 15, 0.92);
+  --home-scrim-bottom-end: rgba(5, 7, 15, 0);
   --sky-zenith: #090b10;
   --sky-midsky: #0b0f18;
   --sky-horizon: #111726;
@@ -220,9 +240,7 @@ textarea {
 }
 
 #screen-home .search-pill-dark:focus-within {
-  box-shadow:
-    0 0 0 1px var(--home-control-focus),
-    0 12px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
 }
 
 #screen-home .info-button {
@@ -240,11 +258,15 @@ textarea {
   opacity: 0.88;
 }
 
+/* No chip background: the suggested row sits directly on the sky. */
+
 #screen-home .home-suggest,
 #screen-home .home-suggest-strong,
 #screen-home .home-suggest-link,
 #screen-home .home-suggest-link:hover {
-  color: var(--home-control-suggest);
+  /* Sampled at the chips' actual vertical position in HomeFeature.applyTime:
+     they sit over a different slice of the gradient than the search pill. */
+  color: var(--home-suggest-ink, var(--home-ink-bottom));
   transition: color 0.18s ease;
 }
 
@@ -256,6 +278,18 @@ textarea {
 .home-muted {
   color: var(--home-ink-top);
   text-shadow: var(--home-shadow);
+}
+
+#screen-home[data-tone="dark"] .home-suggest {
+  background-color: rgba(0, 0, 0, 0.14);
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+}
+
+#screen-home[data-tone="light"] .home-suggest {
+  background-color: rgba(255, 255, 255, 0.22);
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
 }
 
 .home-suggest {
@@ -289,56 +323,14 @@ textarea {
   padding-inline: 0.25rem;
 }
 
-.home-mode-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  min-width: 3.6em;
-  padding: 0.1rem 0.45rem;
+.home-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
   border-radius: 9999px;
-  border: 1px solid var(--home-mode-border);
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: rgba(0, 0, 0, 0.32);
-  color: #ffffff;
-  font-size: 9px;
-  line-height: 1.4;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-shadow: none;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.home-mode-badge.is-visible {
-  visibility: visible;
-  opacity: 1;
-}
-
-.home-mode-badge::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background: currentColor;
-}
-
-.home-mode-badge[data-mode="live"] {
-  color: var(--home-mode-live);
-}
-
-.home-mode-badge[data-mode="forecast"] {
-  color: var(--home-mode-forecast);
-}
-
-.home-mode-badge[data-mode="loading"] {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.home-mode-badge[data-mode="offline"] {
-  color: #fca5a5;
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
+  flex: none;
 }
 
 #ruler-slider-container {
@@ -388,11 +380,23 @@ textarea {
   border-radius: 9999px;
   background: var(--tape-idle, rgba(255, 255, 255, 0.55));
   pointer-events: none;
-  will-change: height, width, background-color;
+  transform: scaleY(1) scaleX(1);
+  transform-origin: center;
+  transition:
+    transform 0.12s var(--ease-unslop),
+    opacity 0.12s linear,
+    background-color 0.12s linear;
+  will-change: transform;
+}
+
+.ruler-tick.is-near .ruler-bar {
+  opacity: 0.9;
 }
 
 .ruler-tick.is-active .ruler-bar {
+  transform: scaleY(1.6) scaleX(1.44);
   background: var(--tape-ink, #ffffff);
+  opacity: 1;
 }
 
 .ruler-live-dot {
@@ -518,7 +522,7 @@ button:disabled,
   }
 
   #screen-gallery header {
-    top: calc(env(safe-area-inset-top) + 4px);
+    top: calc(env(safe-area-inset-top) + 1rem);
     left: calc(1.5rem + env(safe-area-inset-left));
     right: calc(1.5rem + env(safe-area-inset-right));
   }
@@ -535,22 +539,59 @@ button:disabled,
 }
 
 #screen-gallery header {
-  top: calc(env(safe-area-inset-top) + 4px);
+  top: calc(env(safe-area-inset-top) + 0.75rem);
   left: calc(0.75rem + env(safe-area-inset-left));
   right: calc(0.75rem + env(safe-area-inset-right));
+}
+
+#gallery-location-btn,
+#interval-trigger-btn {
+  height: 44px;
+  padding-inline: 12px;
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+
+@media (min-width: 640px) {
+  #gallery-location-btn,
+  #interval-trigger-btn {
+    padding-inline: 16px;
+  }
+}
+
+#interval-popover .int-btn {
+  height: 44px;
+  padding-inline: 12px;
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
 }
 
 #gallery-location-btn {
   max-width: 55%;
   border: 0;
   box-shadow: none;
-  font-size: 12px;
-  font-family: var(--font-sans);
-  font-weight: 500;
 }
 
-#gallery-location-btn:hover {
-  background-color: rgba(0, 0, 0, 0.9);
+#gallery-location-btn,
+#interval-trigger-btn {
+  border: 0;
+  box-shadow: none;
+  transition:
+    background-color 0.15s ease,
+    background-image 0.15s ease,
+    color 0.15s ease;
+}
+
+#gallery-location-btn:hover,
+#interval-trigger-btn:hover {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12));
+  color: #ffffff;
 }
 
 .gallery-main {
@@ -568,8 +609,9 @@ button:disabled,
   grid-template-rows: repeat(var(--grid-rows, 8), minmax(96px, 1fr));
   width: 100%;
   min-height: 100%;
-  /* Padding after the final row, outside the 100% row area, so tiles keep
-     their size and the dock never covers them. */
+  /* Keep the first tile centre below the taller 56 px header pills, and add
+     runway after the final row so the dock never covers a tile. */
+  padding-top: 1rem;
   padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   box-sizing: content-box;
   gap: 0;
@@ -588,6 +630,8 @@ button:disabled,
   .day-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: repeat(var(--grid-rows-sm, 5), minmax(88px, 1fr));
+    /* Desktop has room for the header to float over the mosaic; no top gap. */
+    padding-top: 0;
   }
 
   .day-grid[data-days="7"] {
@@ -745,47 +789,187 @@ button:disabled,
   inset: -11px -1px;
 }
 
-#ref-photo-overlay {
-  visibility: hidden;
-}
 
-#ref-photo-overlay.is-visible {
-  transform: translateX(0);
-  visibility: visible;
-}
 
 #detail-photos {
   min-height: 0;
 }
 
 .photo-tile {
+  position: relative;
   display: block;
   min-width: 0;
+  filter: brightness(0.86);
+  transition:
+    filter 0.15s ease,
+    transform 0.15s ease;
   border: 0;
   padding: 0;
-  background: transparent;
+  background: #e5e7eb;
   text-align: left;
   cursor: pointer;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
 }
 
 .photo-tile-img {
   width: 100%;
-  height: 3.5rem;
+  height: 100%;
   object-fit: cover;
-  border-radius: 0.75rem;
-  background: #e5e7eb;
+  border-radius: 0;
   transition: transform 0.15s ease;
 }
 
-@media (min-width: 640px) {
-  .photo-tile-img {
-    height: 4rem;
-    border-radius: 1rem;
-  }
+.photo-tile:hover,
+.photo-tile:focus-visible {
+  filter: brightness(1.06);
+  transform: scale(1.02);
 }
 
-.photo-tile:hover .photo-tile-img {
-  transform: scale(1.02);
+.photo-tile:focus-visible {
+  outline: 2px solid #0b0d12;
+  outline-offset: 2px;
+  z-index: 1;
+}
+
+.photo-tile-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.35) 45%, transparent 70%);
+  pointer-events: none;
+}
+
+.photo-tile-copy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0.4rem 0.5rem;
+  color: #ffffff;
+  pointer-events: none;
+}
+
+.photo-tile-location {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-tile-time {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.78);
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-tile-handle {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.4rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  max-width: calc(100% - 0.8rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#hud-phase-pill {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 9999px;
+  color: #ffffff;
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+
+/* Inline drum time picker */
+.time-wheel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 45;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+}
+
+.time-wheel[hidden] {
+  display: none;
+}
+
+.time-wheel-column {
+  height: 160px;
+  overflow-y: auto;
+  touch-action: none;
+  scroll-snap-type: none;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+  border-radius: 1rem;
+  background: #f7f7f8;
+  outline: none;
+}
+
+.time-wheel-column::-webkit-scrollbar {
+  display: none;
+}
+
+.time-wheel-track {
+  padding-block: 60px;
+  transition: transform 0.18s var(--ease-unslop);
+}
+
+.time-wheel-item {
+  height: 40px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: none;
+  border: 0;
+  background: transparent;
+  color: #a3a3a3;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.12s ease, font-size 0.12s ease;
+}
+
+.time-wheel-item.is-selected {
+  color: #0b0d12;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.time-wheel-column:focus-visible {
+  box-shadow: inset 0 0 0 2px #0b0d12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .time-wheel-column {
+    scroll-behavior: auto;
+  }
+
+  .time-wheel-item {
+    transition: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -841,16 +1025,12 @@ button:disabled,
     100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)
   );
   min-height: 0;
-  opacity: 0;
-  /* No transformed, clipped layer on iOS: scaling the rounded, overflow-hidden
-     card left its subtree unpainted on later opens. Animate opacity only. */
-  transform: none;
-  transition: opacity 0.18s var(--ease-unslop);
-}
-
-.modal-shell.is-open .modal-card {
+  /* Fully opaque from the first frame: fading the card let the page behind
+     bleed through (a pink band over a sunset sky). No transform, no opacity
+     transition — this also avoids the iOS repaint bug. */
   opacity: 1;
   transform: none;
+  transition: none;
 }
 
 .modal-body {
@@ -861,13 +1041,7 @@ button:disabled,
   overscroll-behavior: contain;
 }
 
-@media (hover: none) {
-  #ref-photo-overlay {
-    background: rgba(0, 0, 0, 0.88);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
+
 
 @media (min-width: 640px) {
   .modal-shell {
@@ -1050,6 +1224,37 @@ input[type="datetime-local"] {
   box-shadow: none;
 }
 
+#city-dropdown [role="option"] {
+  height: 52px;
+  padding-inline: 24px;
+}
+
+@media (min-width: 640px) {
+  #city-dropdown [role="option"] {
+    height: 56px;
+  }
+}
+
+#modal-city-dropdown [role="option"] {
+  height: 52px;
+  padding-inline: 20px;
+}
+
+#submit-location-dropdown [role="option"] {
+  height: 52px;
+  padding-inline: 14px;
+}
+
+#city-dropdown [role="option"]:hover,
+#city-dropdown [role="option"][aria-selected="true"],
+#modal-city-dropdown [role="option"]:hover,
+#modal-city-dropdown [role="option"][aria-selected="true"],
+#submit-location-dropdown [role="option"]:hover,
+#submit-location-dropdown [role="option"][aria-selected="true"] {
+  background-color: #f5f5f5;
+  color: #000000;
+}
+
 .field-input {
   flex: 1;
   min-width: 0;
@@ -1093,6 +1298,7 @@ input[type="datetime-local"] {
 .time-seg {
   background: transparent;
   color: #737373;
+  font-weight: 500;
 }
 
 .time-seg:hover {
@@ -1102,8 +1308,21 @@ input[type="datetime-local"] {
 .time-seg.is-selected,
 .time-seg.is-selected:hover {
   background: transparent;
-  color: #0b0d12;
-  font-weight: 700;
+  color: #737373;
+  font-weight: 500;
+}
+
+.time-day {
+  margin-left: auto;
+  color: #737373;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.time-stepper:focus-visible {
+  outline: 2px solid #0b0d12;
+  outline-offset: 2px;
 }
 
 .time-colon {
@@ -1148,37 +1367,92 @@ input[type="datetime-local"] {
   background: #e5e5e5;
 }
 
-.time-date {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  color: #525252;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+#upload-dropzone {
+  height: 150px;
 }
 
-.time-date:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #0b0d12;
+#submit-palette-empty,
+#submit-palette-result {
+  height: 83px;
+  /* No scrollbar can appear inside the preview block: on systems with
+     "always show scrollbars" it drew a 2 px accent-coloured line. */
+  overflow: hidden;
+  scrollbar-width: none;
 }
 
-#submit-date-trigger,
-[data-action="randomize-handle"] {
-  margin-right: -4px;
+#submit-palette-empty::-webkit-scrollbar,
+#submit-palette-result::-webkit-scrollbar {
+  display: none;
 }
 
 #submit-location-dropdown [role="option"] {
   min-height: 44px;
 }
 
+.dropzone-mobile {
+  display: none;
+}
+
+@media (hover: none) {
+  .dropzone-desktop {
+    display: none;
+  }
+
+  .dropzone-mobile {
+    display: inline;
+  }
+}
+
+#submit-time-stepper:hover,
+#submit-handle-field:hover,
+.search-field--form:hover {
+  background: #ececec;
+}
+
+#submit-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  background: #ffffff;
+}
+
+@media (min-width: 640px) {
+  #submit-sticky-footer {
+    position: static;
+    padding-bottom: 0;
+    background: transparent;
+  }
+}
+
+button,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 .info-button svg {
   display: block;
+}
+
+#turnstile-box {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 1.25rem;
+  padding: 0;
+  transition: opacity 0.15s ease, height 0.15s ease;
+}
+
+#turnstile-box[data-state="loading"],
+#turnstile-box[data-state="waiting"] {
+  padding: 0.5rem;
+  background: #f5f5f5;
+  min-height: 56px;
 }
 
 #turnstile-container:empty {
@@ -1207,6 +1481,8 @@ input[type="datetime-local"] {
 #bot-status[data-state="loading"] {
   color: #737373;
 }
+
+
 
 #submit-time-popover {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
@@ -1256,5 +1532,12 @@ input[type="datetime-local"] {
 
   .app-screen {
     transform: none;
+  }
+}
+
+/* Desktop header sits a touch lower than the mobile safe-area offset. */
+@media (min-width: 640px) {
+  #screen-gallery header {
+    top: calc(env(safe-area-inset-top) + 1rem);
   }
 }

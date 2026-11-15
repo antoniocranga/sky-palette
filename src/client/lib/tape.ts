@@ -229,6 +229,11 @@ export class Tape {
     return snapIndex(this.position, this.gap, this.maxIndexValue);
   }
 
+  /** True when the tape is parked exactly on the step, with no residual motion. */
+  isSettledAt(index: number): boolean {
+    return this.currentIndex === index && Math.abs(this.position - index * this.gap) < 0.5;
+  }
+
   get currentHour(): number {
     return hourForIndex(this.currentIndex);
   }
@@ -551,48 +556,35 @@ export class Tape {
   private render(position: number, force = false, emit = true): void {
     const clamped = position;
     this.position = clamped;
+    // The only per-frame write: the tape itself moves on the compositor.
     this.tape.style.transform = `translateX(${-clamped}px)`;
 
     const index = snapIndex(clamped, this.gap, this.maxIndexValue);
     if (index !== this.lastIndex || force) {
+      const previousIndex = this.lastIndex;
       this.lastIndex = index;
       const label = this.labelForIndex(index);
       this.viewport.setAttribute("aria-valuenow", String(index * 15));
       this.viewport.setAttribute("aria-valuetext", label);
       if (emit) this.emitInput();
+
+      // Class state only changes when the centred index changes. Never size
+      // bars inline per frame: transform/opacity stay on the compositor.
+      for (let offset = -5; offset <= 5; offset += 1) {
+        const tick = this.tickElements[previousIndex + offset];
+        if (tick) tick.classList.remove("is-active", "is-near");
+      }
+      for (let offset = -5; offset <= 5; offset += 1) {
+        const tick = this.tickElements[index + offset];
+        if (!tick) continue;
+        tick.classList.toggle("is-active", offset === 0);
+        tick.classList.toggle("is-near", offset !== 0);
+      }
     }
 
     if (this.liveDot && this.liveIndexValue !== null) {
       const current = this.tickElements[this.liveIndexValue];
       current?.classList.toggle("is-current", index === this.liveIndexValue);
-    }
-
-    for (let i = 0; i < this.ticks.length; i += 1) {
-      const bar = this.ticks[i];
-      if (!bar) continue;
-      const distance = Math.abs(i * this.gap - clamped);
-      if (distance < this.gap) {
-        const t = 1 - distance / this.gap;
-        bar.style.height = `${15 + 9 * t}px`;
-        bar.style.width = `${4.5 + 2 * t}px`;
-        bar.style.backgroundColor = "var(--tape-ink)";
-        bar.style.opacity = "1";
-        if (this.liveDot && this.liveIndexValue === i) {
-          this.liveDot.style.top = "calc(50% + 15px)";
-        }
-      } else if (distance < this.gap * 5) {
-        bar.style.height = "15px";
-        bar.style.width = "4.5px";
-        bar.style.backgroundColor = "var(--tape-idle)";
-        bar.style.opacity = "1";
-      } else if (bar.style.height !== "15px") {
-        bar.style.height = "15px";
-        bar.style.width = "4.5px";
-        bar.style.backgroundColor = "var(--tape-idle)";
-      }
-      if (this.liveDot && this.liveIndexValue === i && distance >= this.gap) {
-        this.liveDot.style.top = "calc(50% + 15px)";
-      }
     }
   }
 

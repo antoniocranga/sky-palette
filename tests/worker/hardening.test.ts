@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { SELF } from "cloudflare:test";
-import { fileFrom, jpegFixture, mockUpstream, openMeteoHandler, submissionForm } from "./helpers";
+import { fileFrom, jpegFixture, mockUpstream, openMeteoHandler, submissionForm, testEnv } from "./helpers";
 
 const BASE = "https://skypalette.test";
 
@@ -22,13 +22,14 @@ describe("upload hardening", () => {
     });
     expect(response.status).toBe(201);
     const body = (await response.json()) as { url: string };
+    await testEnv.DB.prepare("UPDATE submissions SET status = 'approved'").run();
 
-    const photo = await SELF.fetch(body.url);
+    const photo = await SELF.fetch(new URL(body.url, BASE));
     expect(photo.status).toBe(200);
     expect(photo.headers.get("content-type")).toBe("image/jpeg");
     expect(photo.headers.get("x-content-type-options")).toBe("nosniff");
     expect(photo.headers.get("content-disposition")).toBe("inline");
-    expect(photo.headers.get("content-security-policy")).toBeNull();
+    expect(photo.headers.get("content-security-policy")).toContain("sandbox");
   });
 
   it("rejects SVG even when it claims to be a supported type", async () => {

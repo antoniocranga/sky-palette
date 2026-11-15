@@ -19,20 +19,47 @@ import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, isoDayInZone } from "../../shared/time";
 import type { Palette } from "../../shared/types";
 import { cityLabelWithCountry, shareUrlFor, store, type ShareSnapshot } from "../state";
+import { generateHandle, getContributorHandle } from "./submit";
 import { ModalController } from "../lib/dom";
 
 type CardStyle = "studio" | "telemetry" | "horizon" | "monolith";
-type SocialPlatform = "x" | "facebook" | "whatsapp" | "telegram";
+type SocialPlatform = "x" | "facebook" | "whatsapp";
 type NativeOutcome = "shared" | "cancelled" | "unsupported" | "error";
 
 const STYLES: CardStyle[] = ["studio", "telemetry", "horizon", "monolith"];
-const SOCIALS: SocialPlatform[] = ["x", "facebook", "whatsapp", "telegram"];
+const SOCIALS: SocialPlatform[] = ["x", "facebook", "whatsapp"];
 
 const SANS = '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace';
 const SERIF = '"Playfair Display", Georgia, serif';
 
 const INSTAGRAM_TEXT = "My sky right now — Sky Palette";
+let fallbackCardHandle = "";
+
+function cardHandle(snapshot: ShareSnapshot): string {
+  const chosen = getContributorHandle();
+  if (chosen) return chosen;
+  if (!fallbackCardHandle) fallbackCardHandle = generateHandle(snapshot.city.name);
+  return fallbackCardHandle;
+}
+
+function handleTag(snapshot: ShareSnapshot): string {
+  return `@${cardHandle(snapshot)}`;
+}
+
+export function cardMetaText(style: CardStyle, snapshot: ShareSnapshot, handle: string): string {
+  const tag = `@${handle}`;
+  switch (style) {
+    case "studio":
+      return `${snapshot.timeLabel} · ${snapshot.phase} · ${tag}`;
+    case "telemetry":
+      return `${formatDateUpper(snapshot.dateIso)} · ${tag}`;
+    case "horizon":
+      return `${formatDateLong(snapshot.dateIso)} · ${snapshot.timeLabel} · ${tag}`;
+    case "monolith":
+      return `${formatCoordinate(snapshot.city.lat, "lat", 1)} · ${snapshot.timeLabel} · ${formatDateUpper(snapshot.dateIso)} · ${tag}`;
+  }
+}
 const FALLBACK_TOAST = "Story card saved — open Instagram and add it to your Story.";
 const SOCIAL_FALLBACK_TOAST = "Card downloaded — attach it to your post.";
 
@@ -45,9 +72,11 @@ export class ShareFeature {
   private snapshot: ShareSnapshot | null = null;
   private cardBlob: Blob | null = null;
   private storyBlob: Blob | null = null;
+  private preparedStyle: CardStyle | null = null;
   private prepareTimer: ReturnType<typeof setTimeout> | null = null;
   private prepareToken = 0;
   private sharing = false;
+  private activeShare: HTMLButtonElement | null = null;
 
   constructor() {
     const modalRoot = qs<HTMLElement>("#share-modal");
@@ -67,15 +96,15 @@ export class ShareFeature {
     registerAction("download-card", () => {
       void this.download();
     });
-    registerAction("share-card", () => {
-      void this.shareCard();
+    registerAction("share-card", (element) => {
+      void this.shareCard(element);
     });
-    registerAction("share-instagram", () => {
-      void this.shareInstagram();
+    registerAction("share-instagram", (element) => {
+      void this.shareInstagram(element);
     });
     registerAction("share-social", (element) => {
       const platform = element.dataset.platform;
-      if (platform && isSocial(platform)) void this.shareSocial(platform);
+      if (platform && isSocial(platform)) void this.shareSocial(platform, element);
     });
 
     store.subscribeKey("share", () => {
@@ -90,6 +119,8 @@ export class ShareFeature {
     this.snapshot = store.state.share ?? fallbackSnapshot();
     this.cardBlob = null;
     this.storyBlob = null;
+    this.preparedStyle = null;
+    delete this.root.dataset.cardStyle;
     this.renderPreview(this.snapshot);
     this.setStyle(this.style);
     setText(this.status, "");
@@ -130,7 +161,8 @@ export class ShareFeature {
     setText(qs("#studio-city", this.root), snapshot.city.name.toUpperCase());
     setText(qs("#studio-coords", this.root), formatCoordinates(snapshot.city.lat, snapshot.city.lon));
     setText(qs("#studio-date", this.root), formatDateUpper(snapshot.dateIso));
-    setText(qs("#studio-time", this.root), `${snapshot.timeLabel} · ${snapshot.phase}`);
+    const tag = handleTag(snapshot);
+    setText(qs("#studio-time", this.root), `${snapshot.timeLabel} · ${snapshot.phase} · ${tag}`);
 
     setText(qs("#telemetry-city", this.root), snapshot.city.name.toUpperCase());
     setText(
@@ -139,24 +171,24 @@ export class ShareFeature {
     );
     setText(qs("#telemetry-sunset", this.root), snapshot.sunsetLabel);
     setText(qs("#telemetry-elevation", this.root), formatElevation(snapshot.elevation));
-    setText(qs("#telemetry-date", this.root), formatDateUpper(snapshot.dateIso));
+    setText(qs("#telemetry-date", this.root), `${formatDateUpper(snapshot.dateIso)} · ${tag}`);
 
     setText(qs("#horizon-title", this.root), `Sky above ${snapshot.city.name}`);
     setText(qs("#horizon-phase", this.root), `${snapshot.phase} · ${snapshot.timeLabel}`);
-    setText(qs("#horizon-date", this.root), `${formatDateLong(snapshot.dateIso)} · ${snapshot.timeLabel}`);
+    setText(qs("#horizon-date", this.root), `${formatDateLong(snapshot.dateIso)} · ${snapshot.timeLabel} · ${tag}`);
 
     setText(qs("#monolith-city", this.root), snapshot.city.name.toUpperCase());
     setText(
       qs("#monolith-sub", this.root),
-      `${formatCoordinate(snapshot.city.lat, "lat", 1)} · ${snapshot.timeLabel} · ${formatDateUpper(snapshot.dateIso)}`,
+      `${formatCoordinate(snapshot.city.lat, "lat", 1)} · ${snapshot.timeLabel} · ${formatDateUpper(snapshot.dateIso)} · ${tag}`,
     );
   }
 
   /** Re-render both PNGs after a short pause so scrubbing stays responsive. */
   private schedulePrepare(): void {
     const token = ++this.prepareToken;
-    this.cardBlob = null;
-    this.storyBlob = null;
+    // Keep the previous PNGs live while the next style renders, so the native
+    // share buttons never flicker disabled during a style switch.
     this.syncControls();
     if (this.prepareTimer) clearTimeout(this.prepareTimer);
     this.prepareTimer = setTimeout(() => {
@@ -170,13 +202,16 @@ export class ShareFeature {
     try {
       if (document.fonts?.ready) await document.fonts.ready;
       if (token !== this.prepareToken) return;
+      const style = this.style;
       const [card, story] = await Promise.all([
-        renderCard(this.style, snapshot, document.createElement("canvas")),
-        renderStory(snapshot, document.createElement("canvas")),
+        renderCard(style, snapshot, document.createElement("canvas"), cardHandle(snapshot)),
+        renderStory(style, snapshot, document.createElement("canvas"), cardHandle(snapshot)),
       ]);
       if (token !== this.prepareToken) return;
       this.cardBlob = card;
       this.storyBlob = story;
+      this.preparedStyle = style;
+      this.root.dataset.cardStyle = style;
     } catch {
       if (token === this.prepareToken) setText(this.status, "Could not compose the card");
     } finally {
@@ -186,14 +221,21 @@ export class ShareFeature {
 
   private syncControls(): void {
     for (const button of qsa<HTMLButtonElement>('#share-native, #share-instagram, [data-action="share-social"]', this.root)) {
-      const needsStory = button.id === "share-instagram";
-      button.disabled = this.sharing || !(needsStory ? this.storyBlob : this.cardBlob);
+      // Only the control whose share sheet is open disables; the rest stay live.
+      button.disabled = this.sharing && button === this.activeShare;
     }
     this.root.setAttribute("aria-busy", this.sharing ? "true" : "false");
   }
 
-  private setSharing(value: boolean): void {
-    this.sharing = value;
+  private beginShare(trigger?: HTMLElement | null): void {
+    this.sharing = true;
+    this.activeShare = trigger instanceof HTMLButtonElement ? trigger : null;
+    this.syncControls();
+  }
+
+  private endShare(): void {
+    this.sharing = false;
+    this.activeShare = null;
     this.syncControls();
   }
 
@@ -228,20 +270,21 @@ export class ShareFeature {
   }
 
   /** Primary action: native sheet with the pre-rendered 4:5 card. */
-  private async shareCard(): Promise<void> {
+  private async shareCard(trigger?: HTMLElement | null): Promise<void> {
     if (this.sharing) return;
     const snapshot = this.snapshot ?? store.state.share ?? fallbackSnapshot();
     const blob = this.cardBlob;
-    if (!blob) {
+    if (!blob || this.preparedStyle !== this.style) {
       showToast("Card is still rendering…");
       return;
     }
     const filename = sharePngFilename("card", snapshot.city.slug, snapshot.dateIso);
     const title = `Sky above ${snapshot.city.name}`;
-    const text = `${snapshot.phase} · ${snapshot.timeLabel} · ${cityLabelWithCountry(snapshot.city)}`;
+    const handle = getContributorHandle();
+    const text = `${snapshot.phase} · ${snapshot.timeLabel} · ${cityLabelWithCountry(snapshot.city)}${handle ? ` · @${handle}` : ""}`;
     const url = shareUrlFor(snapshot.city, snapshot.dateIso);
 
-    this.setSharing(true);
+    this.beginShare(trigger);
     try {
       const outcome = await nativeShare(blob, filename, title, `${text}\n${url}`);
       if (outcome === "shared") {
@@ -256,24 +299,25 @@ export class ShareFeature {
       setText(this.status, "Card downloaded");
       showToast("Card saved — share it from your photos.");
     } finally {
-      this.setSharing(false);
+      this.endShare();
     }
   }
 
   /** Instagram has no web composer: share the 9:16 story PNG or save it. */
-  private async shareInstagram(): Promise<void> {
+  private async shareInstagram(trigger?: HTMLElement | null): Promise<void> {
     if (this.sharing) return;
     const snapshot = this.snapshot ?? store.state.share ?? fallbackSnapshot();
     const blob = this.storyBlob;
-    if (!blob) {
+    if (!blob || this.preparedStyle !== this.style) {
       showToast("Story card is still rendering…");
       return;
     }
     const filename = sharePngFilename("story", snapshot.city.slug, snapshot.dateIso);
 
-    this.setSharing(true);
+    this.beginShare(trigger);
     try {
-      const outcome = await nativeShare(blob, filename, "Sky Palette Story", INSTAGRAM_TEXT);
+      const handle = getContributorHandle();
+      const outcome = await nativeShare(blob, filename, "Sky Palette Story", `${INSTAGRAM_TEXT}${handle ? ` · @${handle}` : ""}`);
       if (outcome === "shared" || outcome === "cancelled") {
         setText(this.status, outcome === "shared" ? "Story shared" : "");
         return;
@@ -282,7 +326,7 @@ export class ShareFeature {
       setText(this.status, "Story card saved");
       showToast(FALLBACK_TOAST);
     } finally {
-      this.setSharing(false);
+      this.endShare();
     }
   }
 
@@ -291,11 +335,11 @@ export class ShareFeature {
    * file sharing, save the card first and then open the platform composer so
    * the post is never sent as a bare link.
    */
-  private async shareSocial(platform: SocialPlatform): Promise<void> {
+  private async shareSocial(platform: SocialPlatform, trigger?: HTMLElement | null): Promise<void> {
     if (this.sharing) return;
     const snapshot = this.snapshot ?? store.state.share ?? fallbackSnapshot();
     const blob = this.cardBlob;
-    if (!blob) {
+    if (!blob || this.preparedStyle !== this.style) {
       showToast("Card is still rendering…");
       return;
     }
@@ -304,7 +348,7 @@ export class ShareFeature {
     const text = `Sky above ${snapshot.city.name} · ${snapshot.phase} · ${snapshot.timeLabel}`;
     const url = shareUrlFor(snapshot.city, snapshot.dateIso);
 
-    this.setSharing(true);
+    this.beginShare(trigger);
     try {
       const outcome = await nativeShare(blob, filename, title, `${text}\n${url}`);
       if (outcome === "shared" || outcome === "cancelled") {
@@ -316,7 +360,7 @@ export class ShareFeature {
       setText(this.status, "Card downloaded");
       showToast(SOCIAL_FALLBACK_TOAST);
     } finally {
-      this.setSharing(false);
+      this.endShare();
     }
   }
 }
@@ -339,8 +383,6 @@ function socialIntent(platform: SocialPlatform, url: string, text: string): stri
       return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
     case "whatsapp":
       return `https://wa.me/?text=${encodedText}%20${encodedUrl}`;
-    case "telegram":
-      return `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`;
   }
 }
 
@@ -409,40 +451,50 @@ async function canvasToPng(surface: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-export async function renderCard(style: CardStyle, snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null): Promise<Blob> {
+export async function renderCard(style: CardStyle, snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null, handle = ""): Promise<Blob> {
   const surface = canvas ?? document.createElement("canvas");
   surface.width = CARD_SIZE.width;
   surface.height = CARD_SIZE.height;
   const context = surface.getContext("2d");
   if (!context) throw new Error("Canvas 2D unavailable");
 
-  const colors = swatches(snapshot.palette);
-  switch (style) {
-    case "studio":
-      drawStudio(context, snapshot, colors);
-      break;
-    case "telemetry":
-      drawTelemetry(context, snapshot, colors);
-      break;
-    case "horizon":
-      drawHorizon(context, snapshot, colors);
-      break;
-    case "monolith":
-      drawMonolith(context, snapshot, colors);
-      break;
-  }
-
+  drawCardStyle(context, style, snapshot, swatches(snapshot.palette), handle);
   return canvasToPng(surface);
 }
 
-/** 1080 × 1920 Story card with the same palette language as the 4:5 card. */
-export async function renderStory(snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null): Promise<Blob> {
+function drawCardStyle(context: CanvasRenderingContext2D, style: CardStyle, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+  switch (style) {
+    case "studio":
+      drawStudio(context, snapshot, colors, handle);
+      break;
+    case "telemetry":
+      drawTelemetry(context, snapshot, colors, handle);
+      break;
+    case "horizon":
+      drawHorizon(context, snapshot, colors, handle);
+      break;
+    case "monolith":
+      drawMonolith(context, snapshot, colors, handle);
+      break;
+  }
+}
+
+/** 1080 × 1920 Story: palette field with the selected 4:5 card centred. */
+export async function renderStory(style: CardStyle, snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null, handle = ""): Promise<Blob> {
   const surface = canvas ?? document.createElement("canvas");
   surface.width = STORY_SIZE.width;
   surface.height = STORY_SIZE.height;
   const context = surface.getContext("2d");
   if (!context) throw new Error("Canvas 2D unavailable");
-  drawStory(context, snapshot, swatches(snapshot.palette));
+  drawStoryBackdrop(context, snapshot);
+
+  const card = document.createElement("canvas");
+  card.width = CARD_SIZE.width;
+  card.height = CARD_SIZE.height;
+  const cardContext = card.getContext("2d");
+  if (!cardContext) throw new Error("Canvas 2D unavailable");
+  drawCardStyle(cardContext, style, snapshot, swatches(snapshot.palette), handle);
+  context.drawImage(card, 0, (STORY_SIZE.height - CARD_SIZE.height) / 2);
   return canvasToPng(surface);
 }
 
@@ -490,87 +542,25 @@ function drawHexRow(
   context.textAlign = "left";
 }
 
-function drawStory(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[]): void {
-  const width = STORY_LAYOUT.width;
-  const height = STORY_LAYOUT.height;
-  const margin = STORY_LAYOUT.margin;
-  const content = storyContent(snapshot);
-
-  context.fillStyle = "#0B0D12";
+function drawStoryBackdrop(context: CanvasRenderingContext2D, snapshot: ShareSnapshot): void {
+  const width = STORY_SIZE.width;
+  const height = STORY_SIZE.height;
+  const palette = snapshot.palette;
+  const bg = context.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, palette.zenith);
+  bg.addColorStop(0.4, palette.midsky);
+  bg.addColorStop(0.72, palette.horizon);
+  bg.addColorStop(1, palette.sunglow);
+  context.fillStyle = bg;
   context.fillRect(0, 0, width, height);
-
-  const wash = context.createLinearGradient(0, height * 0.42, 0, height);
-  wash.addColorStop(0, "rgba(11,13,18,0)");
-  wash.addColorStop(0.62, "rgba(56,58,74,0.22)");
-  wash.addColorStop(1, "rgba(11,13,18,0)");
-  context.fillStyle = wash;
+  const glow = context.createRadialGradient(width / 2, height * 0.7, 40, width / 2, height * 0.7, width * 0.75);
+  glow.addColorStop(0, `${palette.sunglow}99`);
+  glow.addColorStop(0.7, "rgba(0,0,0,0)");
+  context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
-
-  // Header: wordmark + date, both inside the top safe margin.
-  context.fillStyle = "rgba(255,255,255,0.55)";
-  context.font = `500 22px ${MONO}`;
-  context.fillText(content.eyebrow, margin, 168);
-  context.textAlign = "right";
-  context.fillText(content.date, width - margin, 168);
-  context.textAlign = "left";
-
-  // City, coordinates, local time and phase.
-  context.fillStyle = "#FFFFFF";
-  context.font = `700 78px ${SANS}`;
-  context.fillText(content.city, margin, 286, width - margin * 2);
-  context.fillStyle = "rgba(255,255,255,0.55)";
-  context.font = `400 24px ${MONO}`;
-  context.fillText(content.coords, margin, 342, width - margin * 2);
-  context.fillStyle = "rgba(255,255,255,0.9)";
-  context.font = `500 30px ${MONO}`;
-  context.fillText(`${content.time} · ${content.phase}`, margin, 404, width - margin * 2);
-
-  // Palette field and hex labels.
-  drawSwatchRow(context, colors, margin, STORY_LAYOUT.swatchTop, width - margin * 2, STORY_LAYOUT.swatchHeight, 28);
-  drawHexRow(context, colors, margin, STORY_LAYOUT.hexBaseline, width - margin * 2, "rgba(255,255,255,0.68)", 22);
-
-  // Telemetry panel: elevation, azimuth, cloud cover, phase.
-  const panelY = STORY_LAYOUT.panelTop;
-  const panelW = width - margin * 2;
-  context.fillStyle = "rgba(255,255,255,0.05)";
-  context.beginPath();
-  context.roundRect(margin, panelY, panelW, STORY_LAYOUT.panelHeight, 24);
-  context.fill();
-  context.strokeStyle = "rgba(255,255,255,0.12)";
-  context.lineWidth = 2;
-  context.stroke();
-
-  content.metrics.forEach((metric, index) => {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    const x = column === 0 ? margin + 48 : margin + 468;
-    const labelY = panelY + 62 + row * 130;
-    const valueY = labelY + 58;
-    context.fillStyle = "rgba(255,255,255,0.45)";
-    context.font = `400 18px ${MONO}`;
-    context.fillText(metric.label, x, labelY);
-    context.fillStyle = "#FFFFFF";
-    context.font = `600 34px ${MONO}`;
-    context.fillText(metric.value, x, valueY, 330);
-  });
-
-  // Footer: handle + site.
-  context.strokeStyle = "rgba(255,255,255,0.12)";
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(margin, STORY_LAYOUT.footerRule);
-  context.lineTo(width - margin, STORY_LAYOUT.footerRule);
-  context.stroke();
-
-  context.fillStyle = "rgba(255,255,255,0.75)";
-  context.font = `500 22px ${MONO}`;
-  context.fillText(content.handle, margin, STORY_LAYOUT.footerBaseline);
-  context.textAlign = "right";
-  context.fillText(content.site, width - margin, STORY_LAYOUT.footerBaseline);
-  context.textAlign = "left";
 }
 
-function drawStudio(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[]): void {
+function drawStudio(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
   const width = CARD_SIZE.width;
   const height = CARD_SIZE.height;
   context.fillStyle = "#FAFAFC";
@@ -612,7 +602,7 @@ function drawStudio(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, 
 
   context.fillStyle = "#3F3F46";
   context.font = `400 22px ${MONO}`;
-  context.fillText(`${snapshot.timeLabel} · ${snapshot.phase}`, 80, 1230);
+  context.fillText(cardMetaText("studio", snapshot, handle), 80, 1230, 760);
   context.textAlign = "right";
   context.fillStyle = "#09090B";
   context.font = `600 22px ${MONO}`;
@@ -620,18 +610,11 @@ function drawStudio(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, 
   context.textAlign = "left";
 }
 
-function drawTelemetry(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[]): void {
+function drawTelemetry(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
   const width = CARD_SIZE.width;
   const height = CARD_SIZE.height;
   context.fillStyle = "#0B0D12";
   context.fillRect(0, 0, width, height);
-
-  context.fillStyle = "#34D399";
-  context.beginPath();
-  context.arc(92, 112, 8, 0, Math.PI * 2);
-  context.fill();
-  context.font = `500 22px ${MONO}`;
-  context.fillText("SOLAR TELEMETRY", 114, 120);
 
   context.fillStyle = "#FFFFFF";
   context.font = `700 56px ${MONO}`;
@@ -669,14 +652,14 @@ function drawTelemetry(context: CanvasRenderingContext2D, snapshot: ShareSnapsho
 
   context.fillStyle = "rgba(255,255,255,0.45)";
   context.font = `400 20px ${MONO}`;
-  context.fillText(formatDateUpper(snapshot.dateIso), 80, 1210);
+  context.fillText(cardMetaText("telemetry", snapshot, handle), 80, 1210, 700);
   context.textAlign = "right";
   context.fillStyle = "rgba(255,255,255,0.75)";
   context.fillText("skypalette.app", width - 80, 1210);
   context.textAlign = "left";
 }
 
-function drawHorizon(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[]): void {
+function drawHorizon(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
   const width = CARD_SIZE.width;
   const height = CARD_SIZE.height;
   context.fillStyle = "#0E111A";
@@ -687,10 +670,6 @@ function drawHorizon(context: CanvasRenderingContext2D, snapshot: ShareSnapshot,
   glow.addColorStop(1, "rgba(14,17,26,0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
-
-  context.fillStyle = "rgba(252,211,77,0.65)";
-  context.font = `500 20px ${MONO}`;
-  context.fillText("ATELIER EXHIBITION", 80, 120);
 
   context.fillStyle = "#FEF3C7";
   context.font = `italic 600 66px ${SERIF}`;
@@ -719,13 +698,13 @@ function drawHorizon(context: CanvasRenderingContext2D, snapshot: ShareSnapshot,
 
   context.fillStyle = "rgba(254,243,199,0.7)";
   context.font = `400 22px ${MONO}`;
-  context.fillText(`${formatDateLong(snapshot.dateIso)} · ${snapshot.timeLabel}`, 80, 1220);
+  context.fillText(cardMetaText("horizon", snapshot, handle), 80, 1220, 760);
   context.textAlign = "right";
   context.fillText("skypalette.app", width - 80, 1220);
   context.textAlign = "left";
 }
 
-function drawMonolith(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[]): void {
+function drawMonolith(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
   const width = CARD_SIZE.width;
   const height = CARD_SIZE.height;
   context.fillStyle = "#000000";
@@ -739,7 +718,7 @@ function drawMonolith(context: CanvasRenderingContext2D, snapshot: ShareSnapshot
   context.fillStyle = "rgba(255,255,255,0.55)";
   context.font = `400 20px ${MONO}`;
   context.fillText(
-    `${formatCoordinate(snapshot.city.lat, "lat", 1)} · ${snapshot.timeLabel} · ${formatDateUpper(snapshot.dateIso)}`,
+    cardMetaText("monolith", snapshot, handle),
     64,
     1132,
     width - 128,
@@ -748,8 +727,8 @@ function drawMonolith(context: CanvasRenderingContext2D, snapshot: ShareSnapshot
   context.textAlign = "right";
   context.fillStyle = "rgba(255,255,255,0.9)";
   context.font = `500 22px ${MONO}`;
-  context.fillText("skypalette.app", width - 64, 1104);
+  context.fillText("skypalette.app", width - 64, 1132);
   context.textAlign = "left";
 }
 
-export { drawMonolith, drawStudio, drawTelemetry, drawHorizon, drawStory };
+export { drawMonolith, drawStudio, drawTelemetry, drawHorizon };

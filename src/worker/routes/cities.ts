@@ -2,7 +2,7 @@
 
 import type { CitiesResponse } from "../../shared/types";
 import type { RouteHandler } from "../env";
-import { searchCities } from "../lib/cities";
+import { getCityBySlug, searchCities } from "../lib/cities";
 import { HttpError, jsonResponse, logEvent } from "../lib/http";
 import { enforceEdgeRateLimit } from "../lib/rate-limit";
 
@@ -13,6 +13,21 @@ export const handleCities: RouteHandler = async (request, env, _ctx, context) =>
   await enforceEdgeRateLimit(env.CITIES_LIMITER, request, env, context, "cities");
 
   const url = new URL(request.url);
+
+  // Deep links and the stored preference resolve by exact slug. This avoids
+  // geocoding "tokyo japan", which returns nothing (the geocoder matches names,
+  // not "name country" pairs).
+  const slug = url.searchParams.get("slug");
+  if (slug !== null) {
+    if (!/^[a-z0-9-]{1,80}$/.test(slug)) throw new HttpError(400, "Invalid slug");
+    const city = await getCityBySlug(slug, env);
+    const body: CitiesResponse = { success: true, results: city ? [city] : [] };
+    return jsonResponse(body, 200, {
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+      "X-Cities-Source": "database",
+    });
+  }
+
   const raw = url.searchParams.get("q");
 
   // Strip control characters and collapse whitespace before length checks so

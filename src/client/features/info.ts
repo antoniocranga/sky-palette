@@ -3,7 +3,7 @@
  * Content is static markup; the only dynamic value is the API version.
  */
 
-import { qs, registerAction, setHidden, setText } from "../lib/dom";
+import { qs, registerAction, setText } from "../lib/dom";
 import { ModalController } from "../lib/dom";
 import { store } from "../state";
 
@@ -18,16 +18,6 @@ export class InfoFeature {
 
     registerAction("open-info", (element) => this.open(element));
     registerAction("close-info", () => this.modal.hide());
-
-    registerAction("toggle-legal", (element) => {
-      const doc = element.dataset.doc;
-      if (!doc) return;
-      const target = qs<HTMLElement>(`#legal-doc-${cssEscape(doc)}`, root);
-      if (!target) return;
-      const willShow = target.hidden;
-      setHidden(target, !willShow);
-      element.setAttribute("aria-expanded", willShow ? "true" : "false");
-    });
 
     registerAction("scroll-info", (element) => {
       const id = element.dataset.section;

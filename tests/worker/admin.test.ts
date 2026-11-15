@@ -103,6 +103,31 @@ describe("/api/admin", () => {
   });
 });
 
+describe("admin listing", () => {
+  it("lists submissions for a status with streamable urls", async () => {
+    await withEnvVar("ADMIN_TOKEN", TOKEN, async () => {
+      const id = await upload("203.0.113.170");
+      const response = await SELF.fetch(`${BASE}/api/admin/submissions?status=pending`, {
+        headers: { authorization: `Bearer ${TOKEN}` },
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        submissions: Array<{ id: string; url: string; thumbUrl: string; handle: string }>;
+      };
+      const found = body.submissions.find((item) => item.id === id);
+      expect(found).toBeTruthy();
+      expect(found?.url).toContain("/api/photos/");
+      expect(found?.thumbUrl).toContain("/api/photos/");
+      expect(found?.handle).toMatch(/^sky-/);
+    });
+  });
+
+  it("requires the token for the listing", async () => {
+    const response = await SELF.fetch(`${BASE}/api/admin/submissions?status=pending`);
+    expect(response.status).toBe(401);
+  });
+});
+
 describe("upload kill switch", () => {
   it("returns 503 while reads keep working", async () => {
     await withEnvVar("UPLOADS_ENABLED", "false", async () => {

@@ -221,6 +221,7 @@ export interface SubmissionOverrides {
   lon?: string | null;
   capturedAt?: string | null;
   turnstileToken?: string | null;
+  consent?: string | null;
   citySlug?: string | null;
 }
 
@@ -231,6 +232,7 @@ export function submissionForm(overrides: SubmissionOverrides = {}): FormData {
     ["lon", overrides.lon === undefined ? "26.1025" : overrides.lon],
     ["capturedAt", overrides.capturedAt === undefined ? "2026-11-14T14:51:00.000Z" : overrides.capturedAt],
     ["turnstileToken", overrides.turnstileToken === undefined ? "test-token" : overrides.turnstileToken],
+    ["consent", overrides.consent === undefined ? "true" : overrides.consent],
     ["citySlug", overrides.citySlug === undefined ? "bucharest-romania" : overrides.citySlug],
   ];
   for (const [key, value] of fields) {

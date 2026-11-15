@@ -11,7 +11,6 @@ export interface Env {
   SUBMIT_LIMITER?: RateLimit;
   API_LIMITER?: RateLimit;
   CITIES_LIMITER?: RateLimit;
-  OG_LIMITER?: RateLimit;
   CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
   /** Server-only Turnstile secret. Absent locally disables the check. */
   TURNSTILE_SECRET_KEY?: string;

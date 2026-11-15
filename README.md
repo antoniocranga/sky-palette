@@ -20,7 +20,6 @@ src/shared/palette.ts  ─────┴───►    GET /api/history   → 
   same physics, 60 fps                GET /api/cities    → geocoding + D1 cache
                                       POST /api/submit   → Turnstile, strip EXIF, R2, D1
                                       GET /api/photos/*  → R2 stream
-                                      GET /api/og        → PNG social card
                                       GET /api/health    → D1 liveness
 ```
 

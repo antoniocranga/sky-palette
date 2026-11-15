@@ -6,15 +6,16 @@
  * the server. Turnstile is loaded only when the dialog opens.
  */
 
-import { ApiError, getConfig, getLocation, submitPhoto, type LocationMatch } from "../api";
+import { ApiError, checkHandle, getConfig, getLocation, submitPhoto, type LocationMatch } from "../api";
 import { isAbortError, qs, registerAction, registerChange, setHidden, setText, showToast } from "../lib/dom";
 import { TimeStepper } from "../lib/time-stepper";
 import { CitySearch } from "./search";
-import { formatBytes, formatCoordinate, formatDateShort, parseDateTimeLocalValue, slugify, toDateTimeLocalValue } from "../lib/format";
+import { formatBytes, formatCoordinate, formatDateLong, formatDateShort, parseDateTimeLocalValue, slugify, toDateTimeLocalValue } from "../lib/format";
+import { addDays, isoDayInZone } from "../../shared/time";
 import { readExifGps } from "../lib/exif";
 import { MAX_UPLOAD_BYTES, detectImageFormat, formatMegabytes, validateImage } from "../lib/image-validation";
 import { rgbToHex, type Rgb } from "../lib/color";
-import { store, type AppCity } from "../state";
+import { setScreen, store, type AppCity } from "../state";
 import { ModalController } from "../lib/dom";
 
 interface TurnstileRenderOptions {
@@ -24,12 +25,13 @@ interface TurnstileRenderOptions {
   "expired-callback"?: () => void;
   theme?: "light" | "dark" | "auto";
   appearance?: "always" | "execute" | "interaction-only";
-  size?: "normal" | "compact" | "flexible";
+  size?: "normal" | "compact" | "flexible" | "invisible";
 }
 
 interface TurnstileApi {
   render: (container: HTMLElement, options: TurnstileRenderOptions) => string;
   reset: (widgetId?: string) => void;
+  execute: (widgetId?: string) => void;
   remove: (widgetId?: string) => void;
 }
 
@@ -58,16 +60,17 @@ export class SubmitFeature {
   private readonly locationDropdown = qs<HTMLElement>("#submit-location-dropdown");
   private readonly fromPhotoBadge = qs("#from-photo-badge");
   private readonly photoHint = qs("#photo-location-hint");
-  private readonly dateInput = qs<HTMLInputElement>("#submit-date-input");
-  private readonly dateTrigger = qs<HTMLButtonElement>("#submit-date-trigger");
-  private readonly datePopover = qs("#submit-date-popover");
   private readonly stepper: TimeStepper;
   private readonly locationSearch: CitySearch;
   private readonly paletteEmpty = qs("#submit-palette-empty");
   private readonly paletteResult = qs("#submit-palette-result");
-  private readonly handleLabel = qs("#contributor-handle");
+  private readonly handleInput = qs<HTMLInputElement>("#submit-handle-input");
+  private readonly handleStatus = qs("#handle-status");
+  private readonly handleEdit = qs<HTMLElement>("#submit-handle-edit");
+  private readonly handleField = qs<HTMLElement>("#submit-handle-field");
   private readonly colorStatus = qs("#submit-color-status");
   private readonly submitButton = qs<HTMLButtonElement>("#submit-btn");
+  private readonly timeDay = qs("#submit-time-day");
   private readonly submitLabel = qs("#submit-btn-label");
   private readonly progress = qs("#submit-progress");
   private readonly progressBar = qs<HTMLElement>("#submit-progress-bar");
@@ -98,9 +101,15 @@ export class SubmitFeature {
   private pendingPhotoLocation: PhotoLocation | null = null;
   private previewUrl: string | null = null;
   private handle = "";
+  private handleValid = true;
+  private handleValidating = false;
+  private handleTimer: ReturnType<typeof setTimeout> | null = null;
+  private handleToken = 0;
   private turnstileToken: string | null = null;
   private widgetId: string | null = null;
   private verificationReady = false;
+  private tokenResolver: ((token: string | null) => void) | null = null;
+  private tokenTimer: ReturnType<typeof setTimeout> | null = null;
   private submitting = false;
   private submitted = false;
   private progressTimer: ReturnType<typeof setInterval> | null = null;
@@ -110,10 +119,15 @@ export class SubmitFeature {
   constructor() {
     const root = qs<HTMLElement>("#submit-modal");
     if (!root) throw new Error("#submit-modal is missing");
-    this.modal = new ModalController(root, { initialFocus: "#sky-file-input" });
+    this.modal = new ModalController(root, { initialFocus: ".modal-card" });
 
     this.stepper = new TimeStepper(qs<HTMLElement>("#submit-time-stepper") ?? document.body, {
       onChange: () => this.syncCapturedValue(),
+      onDayChange: (date) => {
+        this.captureDate = date;
+        this.paintWheelDay();
+        this.syncCapturedValue();
+      },
     });
     this.locationSearch = new CitySearch({
       input: this.location ?? document.createElement("input"),
@@ -126,19 +140,14 @@ export class SubmitFeature {
       },
     });
 
-    registerAction("open-submit", (element) => this.open(element));
-    registerAction("close-submit", () => this.modal.hide());
-    registerAction("randomize-handle", () => {
-      this.handle = generateHandle(store.state.city.name);
-      setText(this.handleLabel, this.handle);
-      showToast("New anonymous handle");
+    registerAction("open-submit", (element) => {
+      if (element.closest("#screen-detail")) setScreen("gallery");
+      this.open(element);
     });
+    registerAction("close-submit", () => this.modal.hide());
     registerAction("submit-reset", () => {
       this.resetForm();
     });
-    registerAction("toggle-capture-date", () => this.toggleCaptureDate());
-    registerAction("close-capture-date", () => this.closeCaptureDate());
-    registerAction("apply-capture-date", () => this.applyCaptureDate());
     registerAction("use-photo-location", () => {
       if (this.pendingPhotoLocation) this.applyPhotoLocation(this.pendingPhotoLocation);
     });
@@ -154,18 +163,15 @@ export class SubmitFeature {
 
     this.setSubmitCity(store.state.city);
     this.setCapturedAt(toDateTimeLocalValue(new Date(), store.state.city.timezone));
-
-    document.addEventListener(
-      "pointerdown",
-      (event) => {
-        if (!this.datePopover || this.datePopover.hidden) return;
-        const target = event.target;
-        if (!(target instanceof Node)) return;
-        if (this.datePopover.contains(target) || this.dateTrigger?.contains(target)) return;
-        this.closeCaptureDate();
-      },
-      { passive: true },
-    );
+    const editHandle = (): void => {
+      if (!this.handleInput) return;
+      this.handleInput.readOnly = false;
+      this.handleInput.focus({ preventScroll: true });
+      this.handleInput.select();
+    };
+    this.handleInput?.addEventListener("click", editHandle);
+    this.handleField?.addEventListener("click", editHandle);
+    this.handleInput?.addEventListener("input", () => this.onHandleInput());
 
     store.subscribeKey("config", (config) => {
       if (this.modal.isOpen) {
@@ -179,21 +185,68 @@ export class SubmitFeature {
     if (this.submitted) this.resetForm();
     this.setSubmitCity(city);
     this.setCapturedAt(toDateTimeLocalValue(new Date(), city.timezone));
+    this.syncWheelDays();
     if (!this.handle) {
       this.handle = generateHandle(city.name);
     }
-    setText(this.handleLabel, this.handle);
+    this.handleValid = true;
+    this.handleValidating = false;
+    this.setHandleStatus("");
+    this.setHandleInput(this.handle);
     setHidden(this.errorBox, true);
     this.setupTurnstile();
     this.modal.show(trigger);
   }
 
   private setupTurnstile(): void {
-    if (this.turnstileToken) {
-      this.setVerificationState("ready", "Verified.");
+    if (this.widgetId && window.turnstile) {
+      this.turnstileToken = null;
+      try {
+        window.turnstile.reset(this.widgetId);
+      } catch {
+        // widget may be gone
+      }
+      this.executeTurnstile();
       return;
     }
     void this.ensureVerification();
+  }
+
+  /** Invisible Turnstile: execute and resolve the token, with a 10 s timeout. */
+  private executeTurnstile(): Promise<string | null> {
+    if (this.turnstileToken) return Promise.resolve(this.turnstileToken);
+    if (!this.widgetId || !window.turnstile) {
+      this.setVerificationState("unavailable", "Bot protection is unavailable. Try again.");
+      return Promise.resolve(null);
+    }
+    if (this.tokenResolver) return new Promise((resolve) => {
+      const previous = this.tokenResolver;
+      this.tokenResolver = (token) => { previous?.(token); resolve(token); };
+    });
+    this.setVerificationState("loading", "Checking your browser…");
+    return new Promise<string | null>((resolve) => {
+      this.tokenResolver = resolve;
+      this.tokenTimer = setTimeout(() => {
+        this.tokenResolver = null;
+        this.tokenTimer = null;
+        this.setVerificationState("unavailable", "Check failed — tap Submit to retry.");
+        resolve(null);
+      }, 10_000);
+      try {
+        window.turnstile?.execute(this.widgetId ?? "");
+      } catch {
+        this.setVerificationState("unavailable", "Check failed — tap Submit to retry.");
+        resolve(null);
+      }
+    });
+  }
+
+  private resolveToken(token: string | null): void {
+    if (this.tokenTimer) clearTimeout(this.tokenTimer);
+    this.tokenTimer = null;
+    const resolver = this.tokenResolver;
+    this.tokenResolver = null;
+    resolver?.(token);
   }
 
   private async ensureVerification(): Promise<void> {
@@ -242,24 +295,27 @@ export class SubmitFeature {
       this.widgetId = api.render(this.turnstileContainer, {
         sitekey: siteKey,
         theme: "light",
-        appearance: "interaction-only",
-        size: "compact",
+        appearance: "always",
+        size: "invisible",
         callback: (token) => {
           this.turnstileToken = token;
           this.setVerificationState("ready", "Verified.");
+          this.resolveToken(token);
           this.syncSubmitButton();
         },
         "expired-callback": () => {
           this.turnstileToken = null;
-          this.setVerificationState("waiting", "Verification expired. Complete the check again.");
+          this.setVerificationState("waiting", "Verification expired.");
           this.syncSubmitButton();
         },
         "error-callback": () => {
           this.turnstileToken = null;
-          this.setVerificationState("unavailable", "Verification failed to load. Reload the page and try again.");
+          this.setVerificationState("unavailable", "Check failed — tap Submit to retry.");
+          this.resolveToken(null);
           this.syncSubmitButton();
         },
       });
+      this.executeTurnstile();
     } catch {
       this.setVerificationState(
         "unavailable",
@@ -281,6 +337,11 @@ export class SubmitFeature {
     setHidden(this.turnstileNote, state !== "unavailable");
     if (this.turnstileBox) {
       this.turnstileBox.dataset.state = state;
+      this.turnstileBox.style.height = "0px";
+      this.turnstileBox.style.opacity = "0";
+      this.turnstileBox.style.overflow = "hidden";
+      this.turnstileBox.style.pointerEvents = "none";
+      this.turnstileBox.setAttribute("aria-hidden", "true");
     }
     this.syncSubmitButton();
   }
@@ -295,9 +356,14 @@ export class SubmitFeature {
       store.state.config !== null &&
       Boolean(this.preparedFile) &&
       Boolean(this.capturedValue) &&
+      this.handleValid &&
+      !this.handleValidating &&
       (!hasKey || Boolean(this.turnstileToken));
     this.submitButton.disabled = !canSubmit;
-    setText(this.submitLabel, this.submitting ? "Submitting…" : "Submit for review");
+    setText(
+      this.submitLabel,
+      this.submitting ? "Submitting…" : this.preparedFile ? "Submit for review →" : "Upload your sky",
+    );
   }
 
   private async handleFile(file: File | null): Promise<void> {
@@ -309,6 +375,11 @@ export class SubmitFeature {
     if (!file) {
       this.clearPreparedFile();
       this.syncSubmitButton();
+      return;
+    }
+
+    if (file.type === "image/heic" || file.type === "image/heif" || /\.(heic|heif)$/i.test(file.name)) {
+      this.rejectFile("HEIC isn’t supported — choose a JPEG, PNG or WebP (iOS: Settings → Camera → Formats → Most Compatible).");
       return;
     }
 
@@ -425,8 +496,11 @@ export class SubmitFeature {
     }
 
     if (store.state.config?.turnstileSiteKey && !this.turnstileToken) {
-      this.showError("Finish the bot check before submitting.", "");
-      return;
+      const token = await this.executeTurnstile();
+      if (!token) {
+        this.showError("The bot check did not complete. Tap Submit to retry.", "");
+        return;
+      }
     }
 
     const formData = new FormData();
@@ -435,6 +509,8 @@ export class SubmitFeature {
     formData.append("lat", String(this.submitLat));
     formData.append("lon", String(this.submitLon));
     formData.append("capturedAt", capturedIso);
+    formData.append("consent", "true");
+    formData.append("handle", this.handle);
     formData.append("turnstileToken", this.turnstileToken ?? "");
     formData.append("citySlug", this.submitSlug || store.state.city.slug);
 
@@ -578,6 +654,75 @@ export class SubmitFeature {
     setHidden(this.photoHint, true);
   }
 
+  private paintWheelDay(): void {
+    const today = isoDayInZone(new Date(), store.state.city.timezone);
+    const label = formatDateShort(this.captureDate);
+    const ariaLabel = formatDateLong(this.captureDate);
+    this.stepper.setDayLabel(label, ariaLabel);
+  }
+
+  private syncWheelDays(): void {
+    // The wheel keeps the last seven city-local days, including today.
+    const today = isoDayInZone(new Date(), store.state.city.timezone);
+    const days = Array.from({ length: 7 }, (_, index) => addDays(today, index - 6)).map((date) => ({
+      value: date,
+      label: formatDateShort(date),
+    }));
+    this.stepper.setDays(days, this.captureDate);
+  }
+
+  private setHandleInput(value: string): void {
+    this.handle = value;
+    contributorHandle = value;
+    if (this.handleInput) {
+      this.handleInput.value = value;
+      this.handleInput.readOnly = true;
+    }
+  }
+
+  private setHandleStatus(message: string, state: "valid" | "invalid" | "pending" | "neutral" = "neutral"): void {
+    setText(this.handleStatus, message);
+    if (this.handleStatus) this.handleStatus.dataset.state = state;
+  }
+
+  private onHandleInput(): void {
+    if (!this.handleInput) return;
+    this.handle = this.handleInput.value.trim();
+    contributorHandle = this.handle;
+    this.handleValid = false;
+    this.handleValidating = true;
+    this.setHandleStatus("Validating…", "pending");
+    this.syncSubmitButton();
+    if (this.handleTimer) clearTimeout(this.handleTimer);
+    const token = ++this.handleToken;
+    this.handleTimer = setTimeout(() => {
+      this.handleTimer = null;
+      void this.validateHandle(this.handle, token);
+    }, 400);
+  }
+
+  private async validateHandle(value: string, token: number): Promise<void> {
+    try {
+      const result = await checkHandle(value);
+      if (token !== this.handleToken) return;
+      this.handleValidating = false;
+      if (result.valid && result.available !== false) {
+        this.handleValid = true;
+        this.setHandleStatus("Available", "valid");
+      } else {
+        this.handleValid = false;
+        this.setHandleStatus(handleReason(result.reason, result.valid), "invalid");
+      }
+    } catch {
+      if (token !== this.handleToken) return;
+      this.handleValidating = false;
+      // Keep the typed value; a transport failure must not rewrite it.
+      this.setHandleStatus("Could not validate", "neutral");
+      this.handleValid = true;
+    }
+    this.syncSubmitButton();
+  }
+
   private setSubmitCity(city: AppCity): void {
     this.clearPhotoLocation();
     this.submitSlug = city.slug;
@@ -587,16 +732,15 @@ export class SubmitFeature {
   }
 
   private setCapturedAt(value: string): void {
+    // Defaults to today in the submission city's timezone: the wheel's day
+    // column starts on today and can move back through the previous six days.
     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(value);
-    if (!match) {
-      setText(this.dateTrigger, "Choose date");
-      return;
-    }
+    if (!match) return;
     const [, date = "", hour = "00", minute = "00"] = match;
     this.captureDate = date;
     this.stepper.setValue(Number(hour), Number(minute));
-    if (this.dateInput) this.dateInput.value = date;
-    setText(this.dateTrigger, formatDateShort(date));
+    this.stepper.setDay(date);
+    this.paintWheelDay();
     this.syncCapturedValue();
   }
 
@@ -605,36 +749,6 @@ export class SubmitFeature {
     const minute = String(this.stepper.minute).padStart(2, "0");
     if (this.captureDate) this.capturedValue = `${this.captureDate}T${hour}:${minute}`;
     this.syncSubmitButton();
-  }
-
-  private toggleCaptureDate(): void {
-    if (!this.datePopover) return;
-    const open = this.datePopover.hidden;
-    this.datePopover.hidden = !open;
-    this.dateTrigger?.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      if (this.dateInput && this.captureDate) this.dateInput.value = this.captureDate;
-      this.dateInput?.focus({ preventScroll: true });
-    }
-  }
-
-  private closeCaptureDate(): void {
-    if (!this.datePopover) return;
-    this.datePopover.hidden = true;
-    this.dateTrigger?.setAttribute("aria-expanded", "false");
-  }
-
-  private applyCaptureDate(): void {
-    const date = this.dateInput?.value ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      this.showError("Choose a valid capture date.", "");
-      return;
-    }
-    this.captureDate = date;
-    setText(this.dateTrigger, formatDateShort(date));
-    this.syncCapturedValue();
-    this.closeCaptureDate();
-    this.dateTrigger?.focus({ preventScroll: true });
   }
 
   private resetTurnstile(): void {
@@ -677,13 +791,15 @@ export class SubmitFeature {
     setText(this.fileName, "—");
     setText(this.fileMeta, "—");
     this.handle = generateHandle(store.state.city.name);
-    setText(this.handleLabel, this.handle);
+    this.handleValid = true;
+    this.handleValidating = false;
+    this.setHandleStatus("");
+    this.setHandleInput(this.handle);
     this.photoLookup?.abort();
     this.photoLookup = null;
     this.clearPhotoLocation();
     this.setSubmitCity(store.state.city);
     this.setCapturedAt(toDateTimeLocalValue(new Date(), store.state.city.timezone));
-    this.closeCaptureDate();
     this.locationSearch.close();
     this.resetTurnstile();
     this.syncSubmitButton();
@@ -901,6 +1017,34 @@ function loadTurnstileScript(): Promise<TurnstileApi> {
 /* -------------------------------------------------------------------------- */
 /* Handles                                                                    */
 /* -------------------------------------------------------------------------- */
+
+function handleReason(reason: string | undefined, valid?: boolean): string {
+  switch (reason) {
+    case "too_short":
+    case "too-short":
+      return "Too short · at least 5 characters";
+    case "too_long":
+    case "too-long":
+      return "Too long · at most 24 characters";
+    case "charset":
+    case "invalid-characters":
+      return "Invalid characters · lowercase letters, numbers and single hyphens only";
+    case "edges":
+      return "Invalid characters · cannot start or end with a hyphen";
+    case "reserved":
+      return "That tag is reserved";
+    case "taken":
+      return "Taken";
+    default:
+      return valid === false ? "Not available" : "Taken";
+  }
+}
+
+let contributorHandle = "";
+
+export function getContributorHandle(): string {
+  return contributorHandle;
+}
 
 function generateHandle(cityName: string): string {
   const stem = slugify(cityName).split("-")[0] || "sky";

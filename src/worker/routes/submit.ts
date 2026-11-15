@@ -23,6 +23,7 @@ import {
   type ImageInfo,
 } from "../lib/image";
 import { verifyTurnstile } from "../lib/turnstile";
+import { checkHandle, isHandleAvailable } from "./handles";
 import { fetchWeatherAt } from "../lib/weather";
 
 export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
@@ -57,7 +58,6 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
 
   const ipHash = await clientIpHash(request, env);
   await enforceEdgeRateLimit(env.SUBMIT_LIMITER, request, env, context, "submit");
-  await enforceHourlyQuota(env.DB, ipHash, context);
 
   const form = await parseForm(request);
 
@@ -68,6 +68,13 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
   const lon = formNumber(form.get("lon"), -180, 180, "lon");
   const capturedAt = formInstant(form.get("capturedAt"));
   const citySlug = formCitySlug(form.get("citySlug"));
+  const handle = await resolveHandle(env.DB, form.get("handle"), citySlug);
+
+  // Explicit CC0/publication consent is required, and enforced server-side so a
+  // script cannot skip the checkbox.
+  if (form.get("consent") !== "true") {
+    throw new HttpError(422, "Please confirm you own the photo and agree to publish it under CC0.");
+  }
 
   const photo = form.get("photo");
   if (!(photo instanceof File) || photo.size === 0) {
@@ -81,6 +88,10 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
   if (original.length > MAX_UPLOAD_BYTES) {
     throw new HttpError(413, `Photo must be ${SIZE_LABEL} or smaller`);
   }
+
+  // Only a request that passed Turnstile, field validation and the consent gate
+  // may consume the hourly/global quota.
+  await enforceHourlyQuota(env.DB, ipHash, context);
 
   const info = readImage(original);
   const cleaned = stripMetadata(original, info.format);
@@ -119,15 +130,14 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
   }
 
   const id = crypto.randomUUID();
-  const handle = generateHandle(citySlug);
   const createdAt = new Date().toISOString();
 
   try {
     await env.DB.prepare(
       `INSERT INTO submissions (
          id, city_slug, handle, r2_key, thumb_key, content_type, bytes, width, height,
-         captured_at, lat, lon, palette_json, status, ip_hash, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+         captured_at, lat, lon, palette_json, status, ip_hash, created_at, consent_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
     )
       .bind(
         id,
@@ -144,6 +154,7 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
         lon,
         JSON.stringify(palette),
         ipHash,
+        createdAt,
         createdAt,
       )
       .run();
@@ -168,7 +179,7 @@ export const handleSubmit: RouteHandler = async (request, env, ctx, context) => 
     submissionId: id,
     handle,
     status: "pending",
-    url: stored ? new URL(`/api/photos/${key}`, request.url).toString() : null,
+    url: stored ? `/api/photos/${key}` : null,
   };
 
   logEvent("info", "submit.accepted", {
@@ -282,6 +293,28 @@ function formInstant(value: FormDataValue | null): Date {
     throw new HttpError(400, "capturedAt outside the supported range");
   }
   return parsed;
+}
+
+/**
+ * A user-chosen tag wins if it is valid and unused; otherwise a generated
+ * handle is retried until it is free, so shared links stay unambiguous.
+ */
+async function resolveHandle(db: D1Database, value: FormDataValue | null, citySlug: string | null): Promise<string> {
+  const requested = typeof value === "string" ? value.trim() : "";
+  if (requested) {
+    const checked = await checkHandle(db, requested);
+    if (!checked.ok) {
+      throw new HttpError(checked.reason === "taken" ? 409 : 422, "That tag is not available. Try another one.");
+    }
+    return checked.handle;
+  }
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = generateHandle(citySlug);
+    if (await isHandleAvailable(db, candidate)) return candidate;
+  }
+  // Extremely unlikely; timestamp suffix keeps the insert valid.
+  return `${generateHandle(citySlug)}-${Date.now().toString(36).slice(-3)}`.slice(0, 24);
 }
 
 function formCitySlug(value: FormDataValue | null): string | null {

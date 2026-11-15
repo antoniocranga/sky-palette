@@ -167,10 +167,19 @@ export function resolveHomeTone(background: string, previous: HomeTone | null = 
   return onWhite >= onBlack ? "dark" : "light";
 }
 
+export function nextHomeToneAt(
+  palette: { zenith: string; midsky: string; horizon: string; sunglow: string },
+  fraction: number,
+  previous: HomeTone | null = null,
+  band = 0.15,
+): HomeTone {
+  return resolveHomeTone(homeBackdropColor(palette, fraction), previous, band);
+}
+
 export function nextHomeTone(
   palette: { zenith: string; midsky: string; horizon: string; sunglow: string },
   previous: HomeTone | null = null,
   band = 0.15,
 ): HomeTone {
-  return resolveHomeTone(homeBackdropColor(palette, CONTROL_FRACTION), previous, band);
+  return nextHomeToneAt(palette, CONTROL_FRACTION, previous, band);
 }

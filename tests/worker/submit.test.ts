@@ -33,7 +33,7 @@ async function submit(form: FormData, ip = "203.0.113.10"): Promise<SubmitResult
 
 function keyFromUrl(url: string | null): string {
   if (!url) throw new Error("expected a photo url");
-  const path = new URL(url).pathname;
+  const path = new URL(url, BASE).pathname;
   return decodeURIComponent(path.replace(/^\/api\/photos\//, ""));
 }
 
@@ -117,6 +117,14 @@ describe("POST /api/submit", () => {
     const body = await response.json() as { success: boolean };
     expect(body.success).toBe(false);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("requires the CC0 consent flag and stores no row without it", async () => {
+    mockUpstream(openMeteoHandler());
+    const { response } = await submit(submissionForm({ consent: null }), "203.0.113.19");
+    expect(response.status).toBe(422);
+    const row = await testEnv.DB.prepare("SELECT COUNT(*) AS count FROM submissions").first<{ count: number }>();
+    expect(row?.count).toBe(0);
   });
 
   it("rejects a file that is not an image", async () => {

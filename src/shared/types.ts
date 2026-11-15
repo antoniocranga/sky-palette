@@ -84,11 +84,15 @@ export interface SubmissionResponse {
 export interface GalleryPhoto {
   id: string;
   handle: string;
+  /** City slug chosen at submission time, if any. */
+  citySlug: string | null;
   /** Absolute URL of the streamed photo (`/api/photos/...`). */
   url: string;
   /** Smaller variant for grid tiles; equals `url` when no variant exists. */
   thumbUrl: string;
   capturedAt: string;
+  /** When the photo was uploaded/accepted, used for ordering. */
+  createdAt: string;
   palette: Palette;
   width: number;
   height: number;
@@ -97,6 +101,8 @@ export interface GalleryPhoto {
 export interface GalleryResponse {
   success: true;
   photos: GalleryPhoto[];
+  /** Pass back as `cursor` to fetch the next page; null on the last page. */
+  nextCursor?: string | null;
 }
 
 export interface ConfigResponse {

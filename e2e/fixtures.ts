@@ -7,6 +7,7 @@ import type {
   CitiesResponse,
   City,
   DayPalette,
+  GalleryPhoto,
   HistoryResponse,
   PaletteResponse,
   SubmissionResponse,
@@ -174,7 +175,33 @@ export const test = base.extend<{ api: ApiController }>({
             return;
           }
 
+          if (url.pathname === "/api/handles/check") {
+            const handle = (url.searchParams.get("handle") ?? "").trim();
+            const reserved = new Set(["sky", "admin", "support", "palette"]);
+            let reason: string | undefined;
+            if (handle.length < 5) reason = "too_short";
+            else if (handle.length > 24) reason = "too_long";
+            else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(handle)) reason = "charset";
+            else if (reserved.has(handle)) reason = "reserved";
+            else if (handle === "taken-tag") reason = "taken";
+            await json(route, {
+              success: true,
+              handle,
+              valid: reason !== "too_short" && reason !== "too_long" && reason !== "charset",
+              available: !reason,
+              ...(reason ? { reason } : {}),
+            });
+            return;
+          }
+
           if (url.pathname === "/api/cities") {
+            const slug = (url.searchParams.get("slug") ?? "").trim();
+            if (slug) {
+              const results = CITIES.filter((city) => city.slug === slug);
+              const body: CitiesResponse = { success: true, results };
+              await json(route, body);
+              return;
+            }
             const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
             const results = query.length === 0 ? [] : searchCities(query);
             const body: CitiesResponse = { success: true, results };
@@ -196,36 +223,26 @@ export const test = base.extend<{ api: ApiController }>({
             return;
           }
 
+          if (url.pathname === "/api/photo") {
+            const id = url.searchParams.get("id");
+            const photo = galleryPhotos().find((item) => item.id === id) ?? null;
+            await json(route, photo ? { success: true, photo } : { success: false, error: "Not found" }, photo ? 200 : 404);
+            return;
+          }
+
           if (url.pathname === "/api/gallery") {
             if (state.galleryEmpty) {
-              await json(route, { success: true, photos: [] });
+              await json(route, { success: true, photos: [], nextCursor: null });
               return;
             }
-            await json(route, {
-              success: true,
-              photos: [
-                {
-                  id: "photo-1",
-                  handle: "sky-bucharest-48b",
-                  url: "/photos/full-1.svg",
-                  thumbUrl: "/photos/thumb-1.svg",
-                  capturedAt: "2026-11-13T14:51:00.000Z",
-                  palette: computePalette({ elevation: -1.5 }),
-                  width: 1200,
-                  height: 800,
-                },
-                {
-                  id: "photo-2",
-                  handle: "sky-bucharest-7af",
-                  url: "/photos/full-2.svg",
-                  thumbUrl: "/photos/thumb-2.svg",
-                  capturedAt: "2026-11-12T15:21:00.000Z",
-                  palette: computePalette({ elevation: -5 }),
-                  width: 1200,
-                  height: 800,
-                },
-              ],
-            });
+            const all = galleryPhotos();
+            const cursor = url.searchParams.get("cursor");
+            const limit = Math.max(1, Math.min(12, Number(url.searchParams.get("limit") ?? 6)));
+            const startIndex = cursor ? all.findIndex((photo) => photo.createdAt === cursor) + 1 : 0;
+            const photos = all.slice(startIndex, startIndex + limit);
+            const last = photos[photos.length - 1];
+            const hasMore = startIndex + photos.length < all.length;
+            await json(route, { success: true, photos, nextCursor: hasMore && last ? last.createdAt : null });
             return;
           }
 
@@ -400,6 +417,24 @@ function searchCities(query: string): City[] {
   }).slice(0, 8);
 }
 
+function galleryPhotos(): GalleryPhoto[] {
+  return Array.from({ length: 12 }, (_, index) => {
+    const minute = 51 - index;
+    return {
+      id: `photo-${index + 1}`,
+      handle: index % 2 === 0 ? "sky-bucharest-48b" : "sky-bucharest-7af",
+      citySlug: "bucharest-romania",
+      url: `/photos/full-${(index % 2) + 1}.svg`,
+      thumbUrl: `/photos/thumb-${(index % 2) + 1}.svg`,
+      capturedAt: `2026-11-13T14:${String(minute).padStart(2, "0")}:00.000Z`,
+      createdAt: `2026-11-13T15:${String(minute).padStart(2, "0")}:00.000Z`,
+      palette: computePalette({ elevation: -1.5 - index * 0.2 }),
+      width: 1200,
+      height: 800,
+    };
+  });
+}
+
 function photoSvg(top: string, middle: string, bottom: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="213"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="0.6" stop-color="${middle}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs><rect width="320" height="213" fill="url(#g)"/><circle cx="160" cy="150" r="28" fill="${bottom}" opacity="0.65"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -516,12 +551,13 @@ const TURNSTILE_STUB = `
 window.turnstile = {
   render: function (element, options) {
     window.__turnstileOptions = options;
-    var note = document.createElement("div");
-    note.textContent = "Test verification";
-    note.style.cssText = "font: 12px monospace; color: #065f46; padding: 8px 0;";
-    element.appendChild(note);
-    setTimeout(function () { options.callback("test-turnstile-token"); }, 30);
+    window.__turnstileOptions = options;
+    window.__turnstileCallback = options.callback;
     return "test-widget";
+  },
+  execute: function () {
+    if (window.__turnstileHang) return;
+    setTimeout(function () { window.__turnstileCallback && window.__turnstileCallback("test-turnstile-token"); }, 10);
   },
   reset: function () {},
   remove: function () {}

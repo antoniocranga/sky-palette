@@ -6,9 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "workers_dev": false,
+  "preview_urls": false,
   "routes": [
     { "pattern": "skypalette.app", "custom_domain": true },
-    { "pattern": "www.skypalette.app", "custom_domain": true }
+    { "pattern": "www.skypalette.app/*", "zone_name": "skypalette.app" }
   ],
   "assets": {
     "directory": "./dist/client",
@@ -75,16 +76,11 @@
       "name": "CITIES_LIMITER",
       "namespace_id": "1003",
       "simple": { "limit": 60, "period": 60 }
-    },
-    {
-      "name": "OG_LIMITER",
-      "namespace_id": "1004",
-      "simple": { "limit": 20, "period": 60 }
     }
   ],
   "vars": {
     "ENVIRONMENT": "production",
     "APP_URL": "https://skypalette.app",
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAGBAIjnbTsIMtZ6Z"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGCAyDAXMLHp5BvD"
   }
 }

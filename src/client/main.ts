@@ -5,7 +5,7 @@ import "@fontsource/playfair-display/latin-600-italic.css";
 import "./styles.css";
 import "./modal-scrim.css";
 
-import { getConfig, searchCities, type AppConfig } from "./api";
+import { getCityBySlug, getConfig, searchCities, type AppConfig } from "./api";
 import { bindGlobalActions, qs, registerAction } from "./lib/dom";
 import { ModalController } from "./lib/dom";
 import { HomeFeature } from "./features/home";
@@ -14,6 +14,7 @@ import { DetailFeature } from "./features/detail";
 import { SubmitFeature } from "./features/submit";
 import { ShareFeature } from "./features/share";
 import { InfoFeature } from "./features/info";
+import { PhotoModal } from "./features/photo-modal";
 import { CitySearch, selectCityFromQuery } from "./features/search";
 import {
   DEFAULT_CITY,
@@ -60,6 +61,7 @@ export async function bootstrap(): Promise<void> {
   new SubmitFeature();
   new ShareFeature();
   new InfoFeature();
+  const photoModal = new PhotoModal();
 
   const galleryModalRoot = qs<HTMLElement>("#gallery-search-modal");
   if (galleryModalRoot) {
@@ -99,8 +101,11 @@ export async function bootstrap(): Promise<void> {
       goGallery();
       return;
     }
-    if (target === "home" || target === "detail") {
-      setScreen(target);
+    if (target === "home") {
+      if (store.state.screen === "home") home.returnToLive();
+      else setScreen("home");
+    } else if (target === "detail") {
+      setScreen("detail");
     }
   });
 
@@ -149,7 +154,9 @@ export async function bootstrap(): Promise<void> {
   writeRoute("replace");
   window.addEventListener("popstate", () => {
     void applyHistoryRoute(home, gallery, detail);
+    void photoModal.syncFromUrl();
   });
+  void photoModal.syncFromUrl();
 }
 
 async function loadConfig(): Promise<AppConfig | null> {
@@ -165,12 +172,21 @@ async function loadConfig(): Promise<AppConfig | null> {
 
 async function resolveCityBySlug(slug: string): Promise<AppCity | null> {
   if (slug === DEFAULT_CITY.slug || slug === "bucharest") return DEFAULT_CITY;
+
+  // Exact D1 lookup first: "tokyo-japan" must not be sent to the geocoder as
+  // "tokyo japan", which returns nothing and used to fall back to Bucharest.
+  try {
+    const exact = await getCityBySlug(slug);
+    if (exact) return toAppCity(exact);
+  } catch {
+    // endpoint unavailable: the word search below is the compatibility path
+  }
+
   const words = decodeURIComponent(slug).replace(/-/g, " ");
   try {
     const results = await searchCities(words);
     const exact = results.find((city) => city.slug === slug);
-    const chosen = exact ?? results[0];
-    return chosen ? toAppCity(chosen) : null;
+    return exact ? toAppCity(exact) : null;
   } catch {
     return null;
   }
@@ -257,9 +273,11 @@ function currentRoute(): AppRoute {
 function writeRoute(mode: "push" | "replace"): void {
   if (hydrating) return;
   const path = serializeRoute(currentRoute());
-  if (`${window.location.pathname}${window.location.search}` === path) return;
-  if (mode === "push") window.history.pushState({}, "", path);
-  else window.history.replaceState({}, "", path);
+  const photo = new URL(window.location.href).searchParams.get("photo");
+  const target = photo ? `${path}${path.includes("?") ? "&" : "?"}photo=${encodeURIComponent(photo)}` : path;
+  if (`${window.location.pathname}${window.location.search}` === target) return;
+  if (mode === "push") window.history.pushState({}, "", target);
+  else window.history.replaceState({}, "", target);
 }
 
 function scheduleReplace(): void {
@@ -317,7 +335,9 @@ function applyScreen(): void {
   const backdrop = qs<HTMLElement>("#sky-backdrop");
   if (backdrop) {
     if (screen === "detail") backdrop.style.background = "#FFFFFF";
-    else backdrop.style.background = "#090B10";
+    else if (screen === "gallery") backdrop.style.background = "#090B10";
+    // Home owns its painted palette: leaving it alone here avoids overwriting
+    // the gradient that HomeFeature wrote for this same navigation.
   }
 
   const homeButton = qs("#nav-btn-home");

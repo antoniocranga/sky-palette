@@ -203,6 +203,25 @@ export async function searchCities(searchQuery: string, options: RequestOptions 
   return payload.results;
 }
 
+export interface HandleCheck {
+  handle: string;
+  valid: boolean;
+  available?: boolean;
+  reason?: string;
+}
+
+export async function checkHandle(handle: string, options: RequestOptions = {}): Promise<HandleCheck> {
+  const search = query({ handle: handle.trim() });
+  return requestJson<HandleCheck>(`/api/handles/check?${search}`, {}, { ...options, timeoutMs: 6000 });
+}
+
+/** Exact D1 slug lookup, with no geocoder call. */
+export async function getCityBySlug(slug: string, options: RequestOptions = {}): Promise<City | null> {
+  const search = query({ slug: slug.trim() });
+  const payload = await requestJson<CitiesResponse>(`/api/cities?${search}`, {}, { ...options, timeoutMs: 8000 });
+  return payload.results[0] ?? null;
+}
+
 export async function getLocation(lat: number, lon: number, options: RequestOptions = {}): Promise<LocationMatch | null> {
   const search = query({ lat: lat.toFixed(6), lon: lon.toFixed(6) });
   const payload = await requestJson<{ success: true; match: LocationMatch | null }>(
@@ -213,10 +232,30 @@ export async function getLocation(lat: number, lon: number, options: RequestOpti
   return payload.match;
 }
 
+export async function getGalleryPage(
+  lat: number,
+  lon: number,
+  cursor: string | null = null,
+  limit = 6,
+  options: RequestOptions = {},
+): Promise<GalleryResponse> {
+  const search = query({ lat: lat.toFixed(4), lon: lon.toFixed(4), limit: String(limit), ...(cursor ? { cursor } : {}) });
+  return requestJson<GalleryResponse>(`/api/gallery?${search}`, {}, options);
+}
+
 export async function getGallery(lat: number, lon: number, options: RequestOptions = {}): Promise<GalleryPhoto[]> {
-  const search = query({ lat: lat.toFixed(4), lon: lon.toFixed(4) });
-  const payload = await requestJson<GalleryResponse>(`/api/gallery?${search}`, {}, options);
+  const payload = await getGalleryPage(lat, lon, null, 12, options);
   return payload.photos;
+}
+
+export async function getPhoto(id: string, options: RequestOptions = {}): Promise<GalleryPhoto | null> {
+  const search = query({ id });
+  try {
+    const payload = await requestJson<{ success: true; photo: GalleryPhoto }>(`/api/photo?${search}`, {}, options);
+    return payload.photo;
+  } catch {
+    return null;
+  }
 }
 
 export async function submitPhoto(formData: FormData, options: RequestOptions = {}): Promise<SubmissionResponse> {

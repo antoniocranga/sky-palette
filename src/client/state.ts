@@ -79,7 +79,7 @@ export function cityLabelWithCountry(city: AppCity): string {
   return city.country ? `${city.name}, ${city.country}` : city.name;
 }
 
-/** `?city=<slug>` on first paint, otherwise the Bucharest HQ default. */
+/** `?city=<slug>` on first paint, otherwise the Bucharest default. */
 export function citySlugFromUrl(search = window.location.search): string | null {
   const params = new URLSearchParams(search);
   const slug = params.get("city");

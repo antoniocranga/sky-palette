@@ -138,7 +138,6 @@ export class CitySearch {
       return;
     }
 
-    const dark = this.options.tone !== "light";
     this.results.forEach((city, index) => {
       const row = document.createElement("button");
       row.type = "button";
@@ -146,36 +145,30 @@ export class CitySearch {
       row.setAttribute("role", "option");
       row.setAttribute("aria-selected", index === this.activeIndex ? "true" : "false");
       row.dataset.index = String(index);
-      row.className =
-        "w-full min-h-11 text-left px-3 py-2 flex items-center gap-3 transition-colors " +
-        (index === this.activeIndex
-          ? dark
-            ? "bg-white text-black"
-            : "bg-neutral-900 text-white"
-          : dark
-            ? "text-white hover:bg-white/10"
-            : "text-neutral-800 hover:bg-neutral-100");
+      row.className = [
+        "w-full rounded-full bg-white text-black hover:bg-neutral-100",
+        "transition-colors duration-150 text-left flex items-center gap-3",
+        index === this.activeIndex ? "bg-neutral-100" : "",
+      ].join(" ");
 
       const chip = document.createElement("span");
-      chip.className = dark
-        ? "w-8 h-8 rounded-full bg-white/10 text-white/75 flex items-center justify-center shrink-0"
-        : "w-8 h-8 rounded-full bg-neutral-100 text-neutral-500 flex items-center justify-center shrink-0";
+      chip.className = "w-8 h-8 rounded-full bg-neutral-100 text-neutral-700 flex items-center justify-center shrink-0";
       chip.appendChild(pinIcon());
 
       const left = document.createElement("span");
       left.className = "min-w-0 flex-1";
       const name = document.createElement("span");
-      name.className = "block text-xs font-semibold truncate";
+      name.className = "block text-xs font-semibold truncate text-black";
       name.textContent = city.name;
       const meta = document.createElement("span");
-      meta.className = "block text-[10px] font-mono truncate opacity-70";
+      meta.className = "block text-[10px] font-mono truncate text-neutral-500";
       const postal = (city as City & { postalCode?: string | null }).postalCode;
       const detail = [city.admin1, city.country, postal].filter(Boolean).join(" · ");
       meta.textContent = detail || "Sky";
       left.append(name, meta);
 
       const arrow = document.createElement("span");
-      arrow.className = "shrink-0 opacity-55";
+      arrow.className = "shrink-0 text-neutral-400";
       arrow.setAttribute("aria-hidden", "true");
       arrow.appendChild(arrowIcon());
 
@@ -193,10 +186,7 @@ export class CitySearch {
   private renderMessage(message: string, loading: boolean): void {
     this.dropdown.replaceChildren();
     const row = document.createElement("div");
-    row.className =
-      this.options.tone === "light"
-        ? "px-4 py-3 text-xs text-neutral-500 flex items-center gap-2"
-        : "px-4 py-3 text-xs text-white/70 flex items-center gap-2";
+    row.className = "px-4 py-3 text-xs text-neutral-500 flex items-center gap-2";
     if (loading) {
       const dot = document.createElement("span");
       dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse";
@@ -213,18 +203,12 @@ export class CitySearch {
   private renderError(message: string): void {
     this.dropdown.replaceChildren();
     const row = document.createElement("div");
-    row.className =
-      this.options.tone === "light"
-        ? "px-4 py-3 text-xs text-neutral-700 flex items-center justify-between gap-3"
-        : "px-4 py-3 text-xs text-white/80 flex items-center justify-between gap-3";
+    row.className = "px-4 py-3 text-xs text-neutral-700 flex items-center justify-between gap-3";
     const text = document.createElement("span");
     text.textContent = message;
     const retry = document.createElement("button");
     retry.type = "button";
-    retry.className =
-      this.options.tone === "light"
-        ? "min-h-11 px-3 rounded-full bg-black text-white text-[11px] font-semibold"
-        : "min-h-11 px-3 rounded-full bg-white text-black text-[11px] font-semibold";
+    retry.className = "min-h-11 px-3 rounded-full bg-black text-white text-[11px] font-semibold";
     retry.textContent = "Retry";
     retry.addEventListener("click", () => {
       const query = this.input.value.trim();
@@ -289,11 +273,8 @@ export class CitySearch {
     rows.forEach((row, index) => {
       const active = index === this.activeIndex;
       row.setAttribute("aria-selected", active ? "true" : "false");
-      const dark = this.options.tone !== "light";
-      row.classList.toggle(dark ? "bg-white" : "bg-neutral-900", active);
-      row.classList.toggle(dark ? "text-black" : "text-white", active);
-      if (dark) row.classList.toggle("text-white", !active);
-      else row.classList.toggle("text-neutral-800", !active);
+      row.classList.toggle("bg-neutral-100", active);
+      row.classList.toggle("bg-white", !active);
     });
     const active = rows[this.activeIndex];
     if (active && active.id) {

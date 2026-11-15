@@ -17,11 +17,12 @@ import { handleCities } from "./routes/cities";
 import { handleConfig } from "./routes/config";
 import { handleGallery } from "./routes/gallery";
 import { handleHealth } from "./routes/health";
+import { handleHandleCheck } from "./routes/handles";
 import { handleHistory } from "./routes/history";
 import { handleLocation } from "./routes/location";
-import { handleOg } from "./routes/og";
 import { handlePalette } from "./routes/palette";
 import { handlePhoto } from "./routes/photos";
+import { handlePhotoInfo } from "./routes/photo";
 import { handleSubmit } from "./routes/submit";
 import { handleAdmin } from "./routes/admin";
 
@@ -44,13 +45,14 @@ const ROUTES: readonly RouteDefinition[] = [
   { path: "/api/palette", methods: GET, handler: handlePalette },
   { path: "/api/cities", methods: GET, handler: handleCities },
   { path: "/api/history", methods: GET, handler: handleHistory },
+  { path: "/api/handles/check", methods: GET, handler: handleHandleCheck },
   { path: "/api/location", methods: GET, handler: handleLocation },
   { path: "/api/gallery", methods: GET, handler: handleGallery },
-  { path: "/api/og", methods: GET, handler: handleOg },
   { path: "/api/config", methods: GET, handler: handleConfig },
   { path: "/api/submit", methods: POST, handler: handleSubmit },
+  { path: "/api/photo", methods: GET, handler: handlePhotoInfo },
   { path: "/api/photos/", methods: GET, handler: handlePhoto, prefix: true },
-  { path: "/api/admin/", methods: ["DELETE", "PATCH"] as const, handler: handleAdmin, prefix: true },
+  { path: "/api/admin/", methods: ["GET", "DELETE", "PATCH"] as const, handler: handleAdmin, prefix: true },
 ];
 
 function matchRoute(pathname: string): RouteDefinition | undefined {
@@ -68,6 +70,13 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const context = createRequestContext(request);
+
+    // One canonical host. A route (not a custom domain) points www here so it
+    // cannot serve a duplicate copy of the app.
+    if (url.hostname === "www.skypalette.app") {
+      const target = new URL(url.pathname + url.search, "https://skypalette.app");
+      return Response.redirect(target.toString(), 301);
+    }
 
     try {
       const route = matchRoute(url.pathname);

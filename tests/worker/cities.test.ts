@@ -143,3 +143,33 @@ describe("GET /api/cities", () => {
     expect(body.results[0]?.country).toBe("Romania");
   });
 });
+
+describe("GET /api/cities?slug=", () => {
+  it("resolves an exact slug from D1 without calling the geocoder", async () => {
+    await insertCity("tokyo-japan", "Tokyo", 35.6895, 139.6917);
+    let upstreamCalls = 0;
+    mockUpstream((url) => {
+      if (url.hostname === "geocoding-api.open-meteo.com") upstreamCalls += 1;
+      return null;
+    });
+
+    const response = await SELF.fetch(`${BASE}/api/cities?slug=tokyo-japan`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as CitiesResponse;
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0]?.slug).toBe("tokyo-japan");
+    expect(body.results[0]?.timezone).toBeTruthy();
+    expect(upstreamCalls).toBe(0);
+  });
+
+  it("returns an empty list for an unknown slug", async () => {
+    const response = await SELF.fetch(`${BASE}/api/cities?slug=nowhere-nowhere`);
+    const body = (await response.json()) as CitiesResponse;
+    expect(body.results).toEqual([]);
+  });
+
+  it("rejects a malformed slug", async () => {
+    const response = await SELF.fetch(`${BASE}/api/cities?slug=${encodeURIComponent("../etc/passwd")}`);
+    expect(response.status).toBe(400);
+  });
+});

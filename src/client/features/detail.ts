@@ -7,7 +7,8 @@
  * computed locally from shared solar + palette code.
  */
 
-import { ApiError, getGallery, getPalette } from "../api";
+import { ApiError, getGalleryPage, getPalette } from "../api";
+import { openPhotoModal } from "./photo-modal";
 import { copyText, isAbortError, prefersReducedMotion, qs, registerAction, setHidden, setText, showToast } from "../lib/dom";
 import { formatDateShort, formatDegrees, formatElevation, formatInstantClock, instantForLocalHour, weatherSummary } from "../lib/format";
 import { Tape, indexForHour } from "../lib/tape";
@@ -28,7 +29,6 @@ const SWATCH_IDS = {
 
 export class DetailFeature {
   private readonly title = qs("#detail-title");
-  private readonly subtitle = qs("#detail-time-phase");
   private readonly sky = qs<HTMLElement>("#sky-renderer");
   private readonly sun = qs<HTMLElement>("#sun-orb");
   private readonly hudTime = qs("#hud-time");
@@ -44,12 +44,8 @@ export class DetailFeature {
   private readonly photosEmpty = qs("#detail-photos-empty");
   private readonly photosEmptyTitle = qs("#detail-photos-empty-title");
   private readonly photosEmptyNote = qs("#detail-photos-empty-note");
-  private readonly refOverlay = qs("#ref-photo-overlay");
-  private readonly refImage = qs<HTMLImageElement>("#ref-photo-image");
-  private readonly refTime = qs("#ref-photo-time");
-  private readonly refLocation = qs("#ref-photo-location");
-  private readonly refAuthor = qs("#ref-photo-author");
-  private readonly refBadge = qs("#ref-mode-badge");
+  private readonly photosSentinel = qs("#detail-photos-sentinel");
+  private readonly scrollTopButton = qs<HTMLButtonElement>("#detail-scroll-top");
   private readonly timelapseButton = qs<HTMLButtonElement>("#timelapse-btn");
   private readonly playIcon = qs("#play-icon");
   private readonly pauseIcon = qs("#pause-icon");
@@ -61,6 +57,10 @@ export class DetailFeature {
   private photos: GalleryPhoto[] = [];
   private controller: AbortController | null = null;
   private galleryController: AbortController | null = null;
+  private photoCursor: string | null = null;
+  private photosLoading = false;
+  private photoObserver: IntersectionObserver | null = null;
+  private scrollTopFrame: number | null = null;
   private currentHour = 16.85;
   private timelapseFrame: number | null = null;
   private playing = false;
@@ -85,19 +85,31 @@ export class DetailFeature {
       },
     });
     this.tape.setInk("#0B0D12", "rgba(11, 13, 18, 0.22)");
+    const detailScreen = qs<HTMLElement>("#screen-detail");
+    detailScreen?.addEventListener("scroll", () => this.updateScrollTopButton(), { passive: true });
+    this.scrollTopButton?.addEventListener("click", () => this.scrollToTop());
+    store.subscribeKey("screen", (screen) => {
+      if (screen !== "detail") setHidden(this.scrollTopButton, true);
+      else this.updateScrollTopButton();
+    });
+    if (this.photosSentinel && "IntersectionObserver" in window) {
+      this.photoObserver = new IntersectionObserver(
+        (entries) => { if (entries.some((entry) => entry.isIntersecting)) void this.loadMorePhotos(); },
+        { root: qs("#screen-detail"), rootMargin: "0px 0px 200px 0px" },
+      );
+      this.photoObserver.observe(this.photosSentinel);
+    }
 
     registerAction("open-day", (element) => {
       const index = Number(element.dataset.index);
       if (Number.isFinite(index)) this.open(index, element);
     });
 
-    registerAction("clear-reference", () => this.clearReference());
-
     registerAction("timelapse", () => this.toggleTimelapse());
 
     registerAction("detail-jump", (element) => {
       const kind = element.dataset.kind;
-      this.jumpTo(kind === "noon" ? "noon" : kind === "golden" ? "golden" : "sunset");
+      this.jumpTo(kind === "sunrise" ? "sunrise" : kind === "golden" ? "golden" : "sunset");
     });
 
     registerAction("copy-hex", (element) => {
@@ -111,6 +123,38 @@ export class DetailFeature {
     store.subscribeKey("screen", (screen) => {
       if (screen !== "detail") this.stopTimelapse();
     });
+  }
+
+  private updateScrollTopButton(): void {
+    const screen = qs<HTMLElement>("#screen-detail");
+    const visible = store.state.screen === "detail" && (screen?.scrollTop ?? 0) > 400;
+    setHidden(this.scrollTopButton, !visible);
+  }
+
+  private scrollToTop(): void {
+    const screen = qs<HTMLElement>("#screen-detail");
+    if (!screen) return;
+    if (prefersReducedMotion()) {
+      screen.scrollTop = 0;
+      this.updateScrollTopButton();
+      return;
+    }
+    if (this.scrollTopFrame !== null) cancelAnimationFrame(this.scrollTopFrame);
+    const start = screen.scrollTop;
+    const started = performance.now();
+    const duration = 450;
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      screen.scrollTop = start * (1 - eased);
+      if (t < 1) this.scrollTopFrame = requestAnimationFrame(step);
+      else {
+        this.scrollTopFrame = null;
+        screen.scrollTop = 0;
+        this.updateScrollTopButton();
+      }
+    };
+    this.scrollTopFrame = requestAnimationFrame(step);
   }
 
   open(index: number, source?: HTMLElement, options: { hour?: number | null } = {}): void {
@@ -131,7 +175,6 @@ export class DetailFeature {
     const sourceRect = source?.getBoundingClientRect() ?? null;
     this.cancelFlip();
     this.sourceRect = sourceRect;
-    this.clearReference();
     this.stopTimelapse();
     this.controller?.abort();
     this.galleryController?.abort();
@@ -139,7 +182,6 @@ export class DetailFeature {
     const city = store.state.city;
     setText(this.title, `${formatDateShort(day.date)} · ${city.name}`);
     setHidden(this.note, true);
-    setText(this.subtitle, `Sunset ${day.sunset ?? "—"} · ${day.phase}`);
 
     const sunset = day.sunset ? parseClock(day.sunset) : null;
     const requestedHour = options.hour;
@@ -327,7 +369,6 @@ export class DetailFeature {
     setText(this.timeDisplay, clockInZone(instant, city.timezone));
     this.paintSwatches(day.colors[0], day.colors[1], day.colors[2], day.colors[3], day.colors[4]);
     this.paintSky(day.colors[0], day.colors[1], day.colors[2], day.colors[3], solar.azimuth, solar.elevation);
-    setText(this.subtitle, `${clockInZone(instant, city.timezone)} · ${day.phase}`);
 
     // Seed the share/route snapshot synchronously so the URL is correct before
     // the weather request resolves (and remains correct if it fails).
@@ -370,7 +411,6 @@ export class DetailFeature {
     setText(this.hudPhase, palette.phase);
     setText(this.hudMetrics, `Sun elevation: ${formatElevation(solar.elevation)} · Azimuth: ${formatDegrees(solar.azimuth)}`);
     setText(this.timeDisplay, time);
-    setText(this.subtitle, `${time} · ${palette.phase}`);
     this.paintSwatches(palette.zenith, palette.midsky, palette.horizon, palette.sunglow, palette.cloudtint);
     this.paintSky(palette.zenith, palette.midsky, palette.horizon, palette.sunglow, solar.azimuth, solar.elevation);
 
@@ -465,15 +505,46 @@ export class DetailFeature {
 
   private async loadPhotos(): Promise<void> {
     const city = store.state.city;
+    this.galleryController?.abort();
     this.galleryController = new AbortController();
+    this.photoCursor = null;
+    this.photos = [];
     try {
-      const photos = await getGallery(city.lat, city.lon, { signal: this.galleryController.signal });
-      this.photos = photos.filter((photo) => typeof photo.url === "string" && photo.url.length > 0);
+      const page = await getGalleryPage(city.lat, city.lon, null, 6, { signal: this.galleryController.signal });
+      this.photos = this.uniquePhotos(page.photos);
+      this.photoCursor = page.nextCursor ?? null;
       this.renderPhotos();
     } catch {
       this.photos = [];
       this.renderPhotos("error");
     }
+  }
+
+  private async loadMorePhotos(): Promise<void> {
+    if (!this.photoCursor || this.photosLoading) return;
+    this.photosLoading = true;
+    if (this.photosSentinel) setHidden(this.photosSentinel, false);
+    const city = store.state.city;
+    const cursor = this.photoCursor;
+    this.galleryController = new AbortController();
+    try {
+      const page = await getGalleryPage(city.lat, city.lon, cursor, 6, { signal: this.galleryController.signal });
+      this.photos = this.uniquePhotos([...this.photos, ...page.photos]);
+      this.photoCursor = page.nextCursor ?? null;
+      this.renderPhotos();
+    } finally {
+      this.photosLoading = false;
+      if (this.photosSentinel) setHidden(this.photosSentinel, !this.photoCursor);
+    }
+  }
+
+  private uniquePhotos(photos: GalleryPhoto[]): GalleryPhoto[] {
+    const seen = new Set<string>();
+    return photos.filter((photo) => {
+      if (!photo.id || seen.has(photo.id)) return false;
+      seen.add(photo.id);
+      return typeof photo.url === "string" && photo.url.length > 0;
+    });
   }
 
   private renderPhotos(state: "ready" | "error" = "ready"): void {
@@ -484,9 +555,12 @@ export class DetailFeature {
     if (this.photos.length === 0) {
       setHidden(this.photosEmpty, false);
       setHidden(this.photosGrid, true);
+      if (this.photosSentinel) setHidden(this.photosSentinel, true);
       setText(
         this.photosEmptyTitle,
-        state === "error" ? "Community captures are unavailable right now" : "No community captures for this day yet — be the first",
+        state === "error"
+          ? "Community photos are unavailable right now"
+          : "No skies for this day yet. Be the first. New photos appear after a quick review.",
       );
       setText(
         this.photosEmptyNote,
@@ -499,14 +573,14 @@ export class DetailFeature {
 
     setHidden(this.photosEmpty, true);
     setHidden(this.photosGrid, false);
+    if (this.photosSentinel) setHidden(this.photosSentinel, !this.photoCursor);
 
-    this.photos.slice(0, 8).forEach((photo) => {
+    this.photos.forEach((photo) => {
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "photo-tile";
+      tile.dataset.photoId = photo.id;
 
-      const wrap = document.createElement("div");
-      wrap.className = "relative";
       const image = document.createElement("img");
       image.className = "photo-tile-img";
       image.loading = "lazy";
@@ -515,50 +589,40 @@ export class DetailFeature {
       image.width = photo.width;
       image.height = photo.height;
       image.alt = `Sky photo by @${photo.handle}, ${formatDateShort(photo.capturedAt.slice(0, 10))}`;
-      const badge = document.createElement("span");
-      badge.className =
-        "absolute top-1 left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono tabular-nums bg-black/60 text-white";
-      badge.textContent = formatInstantClock(photo.capturedAt, store.state.city.timezone);
-      wrap.append(image, badge);
-
-      const handle = document.createElement("div");
-      handle.className = "pt-1 truncate text-[10px] sm:text-[11px] font-medium text-black";
-      handle.textContent = photo.handle;
-
-      tile.append(wrap, handle);
-      tile.addEventListener("click", () => this.openReference(photo));
+      const shade = document.createElement("span");
+      shade.className = "photo-tile-shade";
+      const copy = document.createElement("span");
+      copy.className = "photo-tile-copy";
+      const location = document.createElement("span");
+      location.className = "photo-tile-location";
+      location.textContent = store.state.city.name;
+      const time = document.createElement("span");
+      time.className = "photo-tile-time";
+      time.textContent = formatInstantClock(photo.capturedAt, store.state.city.timezone);
+      copy.append(location, time);
+      const handle = document.createElement("span");
+      handle.className = "photo-tile-handle";
+      handle.textContent = `@${photo.handle}`;
+      tile.append(image, shade, copy, handle);
+      tile.addEventListener("click", () => openPhotoModal(photo));
       this.photosGrid?.appendChild(tile);
     });
   }
 
-  private openReference(photo: GalleryPhoto): void {
-    if (!this.refOverlay || !this.refImage) return;
-    this.refImage.src = photo.url;
-    this.refImage.alt = `Sky photo by ${photo.handle}`;
-    setText(this.refTime, `Capture ${formatInstantClock(photo.capturedAt, store.state.city.timezone)}`);
-    setText(this.refLocation, `${store.state.city.name} · ${formatDateShort(photo.capturedAt.slice(0, 10))}`);
-    setText(this.refAuthor, `@${photo.handle}`);
-    this.refOverlay.classList.add("is-visible");
-    this.refOverlay.setAttribute("aria-hidden", "false");
-    setHidden(this.refBadge, false);
-  }
-
-  private clearReference(): void {
-    this.refOverlay?.classList.remove("is-visible");
-    this.refOverlay?.setAttribute("aria-hidden", "true");
-    if (this.refImage) {
-      this.refImage.removeAttribute("src");
-      this.refImage.alt = "";
-    }
-    setHidden(this.refBadge, true);
-  }
-
-  private jumpTo(kind: "noon" | "golden" | "sunset"): void {
+  private jumpTo(kind: "sunrise" | "golden" | "sunset"): void {
     if (!this.day) return;
     const city = store.state.city;
     const sunTimes = this.sunTimes;
     let hour = 12;
-    if (kind === "sunset") {
+    if (kind === "sunrise") {
+      const sunrise = sunTimes?.sunrise;
+      if (sunrise) hour = fractionalHourInZone(new Date(sunrise), city.timezone);
+      else if (this.day) {
+        const noon = instantForLocalHour(this.day.date, 12, city.timezone);
+        const times = getSunTimes(city.lat, city.lon, noon);
+        if (times.sunrise) hour = fractionalHourInZone(new Date(times.sunrise), city.timezone);
+      }
+    } else if (kind === "sunset") {
       const clock = this.day.sunset ? parseClock(this.day.sunset) : null;
       if (clock) hour = clock.hours + clock.minutes / 60;
       else if (sunTimes?.sunset) hour = fractionalHourInZone(new Date(sunTimes.sunset), city.timezone);
