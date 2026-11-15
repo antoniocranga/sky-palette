@@ -122,9 +122,18 @@ describe("admin listing", () => {
     });
   });
 
-  it("requires the token for the listing", async () => {
-    const response = await SELF.fetch(`${BASE}/api/admin/submissions?status=pending`);
-    expect(response.status).toBe(401);
+  it("requires the token for the listing when the surface is configured", async () => {
+    await withEnvVar("ADMIN_TOKEN", TOKEN, async () => {
+      const response = await SELF.fetch(`${BASE}/api/admin/submissions?status=pending`);
+      expect(response.status).toBe(401);
+    });
+  });
+
+  it("hides the listing when no admin token is configured", async () => {
+    await withEnvVar("ADMIN_TOKEN", undefined, async () => {
+      const response = await SELF.fetch(`${BASE}/api/admin/submissions?status=pending`);
+      expect(response.status).toBe(404);
+    });
   });
 });
 
