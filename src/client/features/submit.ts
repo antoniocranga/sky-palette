@@ -655,7 +655,6 @@ export class SubmitFeature {
   }
 
   private paintWheelDay(): void {
-    const today = isoDayInZone(new Date(), store.state.city.timezone);
     const label = formatDateShort(this.captureDate);
     const ariaLabel = formatDateLong(this.captureDate);
     this.stepper.setDayLabel(label, ariaLabel);

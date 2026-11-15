@@ -13,7 +13,7 @@ import {
   formatDateUpper,
   formatElevation,
 } from "../lib/format";
-import { CARD_SIZE, STORY_LAYOUT, STORY_SIZE, sharePngFilename, storyContent } from "../lib/share-card";
+import { CARD_SIZE, STORY_SIZE, sharePngFilename } from "../lib/share-card";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, isoDayInZone } from "../../shared/time";

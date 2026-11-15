@@ -9,7 +9,7 @@
 import { ApiError, getPalette } from "../api";
 import { isAbortError, qs, registerAction, setHidden, setText } from "../lib/dom";
 import { formatElevation, formatPercent, instantForLocalHour, timeZoneAbbreviation, weatherSummary } from "../lib/format";
-import { HOME_CONTROL_PALETTES, homeBackdropColor, nextHomeToneAt, rulerTextColor, type HomeTone } from "../lib/contrast";
+import { HOME_CONTROL_PALETTES, nextHomeToneAt, rulerTextColor, type HomeTone } from "../lib/contrast";
 import { hexToRgb } from "../lib/color";
 import { Tape, indexForHour } from "../lib/tape";
 import { computePalette } from "../../shared/palette";
