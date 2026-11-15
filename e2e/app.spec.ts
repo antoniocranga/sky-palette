@@ -1183,10 +1183,11 @@ test.describe("Sky Palette app", () => {
         };
       }),
     );
-    for (const item of geometry) {
+    for (const [index, item] of geometry.entries()) {
       expect(item.height).toBeCloseTo(geometry[0]!.height, 1);
       expect(item.paddingLeft).toBe(geometry[0]!.paddingLeft);
-      expect(item.paddingRight).toBe(geometry[0]!.paddingRight);
+      if (index < 2) expect(item.paddingRight).toBe(geometry[0]!.paddingRight);
+      else expect(item.paddingRight, "handle reserves the pencil inset").toBe("58px");
       expect(item.radius).toBe(geometry[0]!.radius);
       expect(item.border).toBe(geometry[0]!.border);
       expect(item.border).toBe("0px");
@@ -1206,7 +1207,7 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("[data-time-increase]")).toHaveCount(0);
     const beforeHour = Number(await hour.textContent());
     await hour.click();
-    await expect(hour).toHaveClass(/is-selected/);
+    await expect(hour).not.toHaveClass(/is-selected/);
     await expect(hour).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(wheel).toBeVisible();
     for (const key of ["hour", "minute", "day"]) {
@@ -1909,28 +1910,115 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
     await expect(page.locator("#submit-date-trigger")).toHaveCount(0);
     await expect(page.locator("#submit-date-popover")).toHaveCount(0);
+    const body = page.locator("#submit-form-body");
     const field = page.locator("#submit-time-stepper");
+    await field.scrollIntoViewIfNeeded();
+    const bodyScroll = await body.evaluate((element) => element.scrollTop);
     await field.click();
     const wheel = page.locator("#submit-time-wheel");
     await expect(wheel).toBeVisible();
     const hour = page.locator("[data-time-hour]");
+    const minute = page.locator("[data-time-minute]");
     const before = Number(await hour.textContent());
     const column = wheel.locator('[data-wheel="hour"]');
     const box = await column.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
     await page.mouse.down();
     for (let step = 1; step <= 10; step += 1) {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - step * 8.4);
+      await page.mouse.move(x, y - step * 6);
       await page.waitForTimeout(25);
     }
+    // The pill is committed only when the wheel settles.
+    expect(Number(await hour.textContent())).toBe(before);
     await page.mouse.up();
-    await page.waitForTimeout(700);
-    const after = Number(await hour.textContent());
-    expect(after).not.toBe(before);
-    const top = await column.evaluate((element) => element.scrollTop);
-    expect(Math.abs(top / 40 - Math.round(top / 40))).toBeLessThan(0.01);
+    const expected = (before + 1) % 24;
+    await expect.poll(async () => Number(await hour.textContent()), { timeout: 2_000 }).toBe(expected);
+    await page.waitForTimeout(500);
+    expect(Number(await hour.textContent()), "stays after settle").toBe(expected);
+
+    const settled = await column.evaluate((element) => {
+      const track = element.querySelector<HTMLElement>(".time-wheel-track")!;
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(track).transform);
+      const selected = element.querySelector<HTMLElement>(".time-wheel-item.is-selected")!;
+      const columnRect = element.getBoundingClientRect();
+      const rowRect = selected.getBoundingClientRect();
+      return {
+        offset: matrix.m42,
+        centered: Math.abs(rowRect.top + rowRect.height / 2 - (columnRect.top + columnRect.height / 2)),
+      };
+    });
+    expect(Math.abs(settled.offset / 40 - Math.round(settled.offset / 40))).toBeLessThan(0.01);
+    expect(settled.centered).toBeLessThanOrEqual(2);
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(bodyScroll);
+    await expect(minute).toHaveText(/^\d{2}$/);
+    await page.keyboard.press("Escape");
+    await expect(wheel).toBeHidden();
+  });
+
+  test("submit wheel flings forward and bounces at both ends", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    const field = page.locator("#submit-time-stepper");
+    await field.click();
+    const wheel = page.locator("#submit-time-wheel");
+    await expect(wheel).toBeVisible();
+    const hour = page.locator("[data-time-hour]");
+    const column = wheel.locator('[data-wheel="hour"]');
+    const box = await column.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+
+    const before = Number(await hour.textContent());
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 5; step += 1) {
+      await page.mouse.move(x, y - step * 40);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(900);
+    const flung = Number(await hour.textContent());
+    expect(flung).toBeGreaterThanOrEqual(before + 2);
+
+    // Bounce at 23.
+    await column.press("Home");
+    await expect(hour).toHaveText("00");
+    await column.press("End");
+    await expect(hour).toHaveText("23");
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 10; step += 1) {
+      await page.mouse.move(x, y - step * 12);
+      await page.waitForTimeout(30);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+    await expect(hour).toHaveText("23");
+    const endCenter = await column.evaluate((element) => {
+      const selected = element.querySelector<HTMLElement>(".time-wheel-item.is-selected")!;
+      const columnRect = element.getBoundingClientRect();
+      const rowRect = selected.getBoundingClientRect();
+      return Math.abs(rowRect.top + rowRect.height / 2 - (columnRect.top + columnRect.height / 2));
+    });
+    expect(endCenter).toBeLessThanOrEqual(2);
+
+    // Bounce at 0.
+    await column.press("Home");
+    await expect(hour).toHaveText("00");
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 10; step += 1) {
+      await page.mouse.move(x, y + step * 12);
+      await page.waitForTimeout(30);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+    await expect(hour).toHaveText("00");
     await page.keyboard.press("Escape");
     await expect(wheel).toBeHidden();
   });
@@ -1948,8 +2036,14 @@ test.describe("Sky Palette app", () => {
     await wheel.locator('[data-wheel="day"] .time-wheel-item[data-value="2026-11-13"]').click();
     await expect(page.locator("#submit-time-stepper")).toContainText(/·\s*Nov 13/);
     await expect(page.locator("#submit-time-stepper")).toHaveAttribute("aria-label", /November 13/);
-    await wheel.locator('[data-wheel="hour"] .time-wheel-item[data-value="10"]').click();
-    await wheel.locator('[data-wheel="minute"] .time-wheel-item[data-value="0"]').click();
+    const hourColumn = wheel.locator('[data-wheel="hour"]');
+    await hourColumn.press("Home");
+    for (let index = 0; index < 10; index += 1) await hourColumn.press("ArrowDown");
+    await expect(page.locator("[data-time-hour]")).toHaveText("10");
+    await page.keyboard.press("ArrowRight");
+    await expect(wheel.locator('[data-wheel="minute"]')).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(page.locator("[data-time-minute]")).toHaveText("00");
     await page.keyboard.press("Escape");
     await page.locator("#submit-btn").click();
     await expect(page.locator("#submit-success")).toBeVisible({ timeout: 10_000 });
@@ -2351,6 +2445,7 @@ test.describe("Sky Palette app", () => {
       });
     const location = await recipe("#submit-location-input");
     expect(await recipe("#submit-time-stepper [data-time-hour]")).toEqual(location);
+    expect(await recipe("#submit-time-stepper [data-time-minute]")).toEqual(location);
     expect(await recipe("#submit-time-stepper #submit-time-day")).toEqual(location);
     expect(await recipe("#submit-handle-input")).toEqual(location);
     expect(await recipe("#submit-time-stepper .time-colon")).toEqual(location);
@@ -2359,6 +2454,106 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#submit-time-stepper")).toHaveCSS("background-color", "rgb(236, 236, 236)");
     await page.locator("#submit-handle-field").hover();
     await expect(page.locator("#submit-handle-field")).toHaveCSS("background-color", "rgb(236, 236, 236)");
+  });
+
+  test("submit tag pencil stays pinned and matches the location magnifier inset", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+
+    const measure = () =>
+      page.evaluate(() => {
+        const location = document.querySelector<HTMLElement>("#submit-location-input")!;
+        const field = location.closest<HTMLElement>(".search-field")!;
+        const svgs = field.querySelectorAll<SVGElement>("svg");
+        const magnifier = svgs[svgs.length - 1]!;
+        const edit = document.querySelector<HTMLElement>("#submit-handle-edit")!;
+        const pencil = edit.querySelector<SVGElement>("svg")!;
+        const input = document.querySelector<HTMLElement>("#submit-handle-input")!;
+        const status = document.querySelector<HTMLElement>("#handle-status")!;
+        const magnifierRect = magnifier.getBoundingClientRect();
+        const pencilRect = pencil.getBoundingClientRect();
+        const editRect = edit.getBoundingClientRect();
+        const inputRect = input.getBoundingClientRect();
+        const statusRect = status.getBoundingClientRect();
+        return {
+          magnifierRight: magnifierRect.right,
+          pencilRight: pencilRect.right,
+          editLeft: editRect.left,
+          editRight: editRect.right,
+          editWidth: editRect.width,
+          editHeight: editRect.height,
+          inputRight: inputRect.right,
+          statusRight: statusRect.right,
+        };
+      });
+
+    const idle = await measure();
+    expect(Math.abs(idle.pencilRight - idle.magnifierRight)).toBeLessThanOrEqual(2);
+    expect(idle.editWidth).toBe(44);
+    expect(idle.editHeight).toBe(44);
+    expect(idle.inputRight).toBeLessThanOrEqual(idle.editLeft + 0.5);
+
+    const handle = page.locator("#submit-handle-input");
+    await handle.click();
+    await handle.fill("valid-sky-01");
+    await expect(page.locator("#handle-status")).toHaveText("Available", { timeout: 5_000 });
+    const available = await measure();
+    expect(Math.abs(available.pencilRight - available.magnifierRight)).toBeLessThanOrEqual(2);
+    expect(available.pencilRight, "pencil must not move when status appears").toBeCloseTo(idle.pencilRight, 2);
+    expect(available.inputRight).toBeLessThanOrEqual(available.editLeft + 0.5);
+    expect(available.statusRight).toBeLessThanOrEqual(available.editLeft + 0.5);
+  });
+
+  test("opening the time wheel leaves the pill unhighlighted", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+    const pill = page.locator("#submit-time-stepper");
+    const body = page.locator("#submit-form-body");
+    await pill.scrollIntoViewIfNeeded();
+    const idle = await pill.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        border: style.borderTopColor,
+        shadow: style.boxShadow,
+        hourColor: getComputedStyle(element.querySelector<HTMLElement>("[data-time-hour]")!).color,
+        minuteColor: getComputedStyle(element.querySelector<HTMLElement>("[data-time-minute]")!).color,
+        scrollTop: document.querySelector<HTMLElement>("#submit-form-body")!.scrollTop,
+      };
+    });
+    await pill.click();
+    const wheel = page.locator("#submit-time-wheel");
+    await expect(wheel).toBeVisible();
+
+    const open = await pill.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        border: style.borderTopColor,
+        shadow: style.boxShadow,
+        hourColor: getComputedStyle(element.querySelector<HTMLElement>("[data-time-hour]")!).color,
+        minuteColor: getComputedStyle(element.querySelector<HTMLElement>("[data-time-minute]")!).color,
+        scrollTop: document.querySelector<HTMLElement>("#submit-form-body")!.scrollTop,
+      };
+    });
+    expect(open.border).toBe(idle.border);
+    expect(open.shadow).toBe(idle.shadow);
+    expect(open.hourColor).toBe(idle.hourColor);
+    expect(open.minuteColor).toBe(idle.minuteColor);
+    expect(open.scrollTop).toBe(idle.scrollTop);
+    await expect(page.locator("[data-time-hour]")).not.toHaveClass(/is-selected/);
+    await expect(page.locator("[data-time-minute]")).not.toHaveClass(/is-selected/);
+
+    await wheel.locator('[data-wheel="minute"]').focus();
+    const focused = await pill.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { border: style.borderTopColor, shadow: style.boxShadow };
+    });
+    expect(focused.border).toBe(idle.border);
+    expect(focused.shadow).toBe(idle.shadow);
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(idle.scrollTop);
+    await page.locator("#submit-title").click();
+    await expect(wheel).toBeHidden();
   });
 
   test("share modal closes without a card-only frame", async ({ page }) => {

@@ -10,6 +10,7 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 - **Detail ruler**: follows the live sky like Home — today's tape stops at the current quarter-hour with a live checkpoint and badge; past days keep the full 00:00–24:00 range, and timelapse and phase jumps clamp to the bound.
 - **Share modal**: paper-airplane dock icon, scroll-to-top button matched to the Share button, fields share one typography, and closing no longer flashes the card.
 - **Footer**: one sentence with inline Privacy Policy, Terms and a Protected explanation instead of a separate row.
+- **Submit drum**: the hour, minute and day wheels are transform-driven with 1:1 dragging, correct momentum, 40 px snapping and a rubber-band at both ends; the pill keeps the location typography and the tag pencil sits on the same inset as the search icon.
 - **Resilience**: skeleton rows during the first gallery load and every append; the offline toast carries a retry button and survives unrelated successful requests.
 - **iPhone**: sky backdrop and scrims cover the full visual viewport across the safe areas.
 
