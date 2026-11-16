@@ -19,15 +19,15 @@ export const STORY_LAYOUT = {
   height: STORY_SIZE.height,
   margin: 120,
   safeMargin: 96,
-  contentTop: 120,
-  contentBottom: 1800,
+  contentTop: 180,
+  contentBottom: 1740,
   swatchTop: 450,
   swatchHeight: 690,
   hexBaseline: 1200,
-  panelTop: 1270,
-  panelHeight: 330,
-  footerRule: 1660,
-  footerBaseline: 1740,
+  panelTop: 1260,
+  panelHeight: 320,
+  footerRule: 1630,
+  footerBaseline: 1700,
 } as const;
 
 export const SHARE_HANDLE = "@skypalette";

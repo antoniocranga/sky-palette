@@ -11,6 +11,7 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 - **Share modal**: paper-airplane dock icon, scroll-to-top button matched to the Share button, fields share one typography, and closing no longer flashes the card.
 - **Footer**: one sentence with inline Privacy Policy, Terms and a Protected explanation instead of a separate row.
 - **Submit drum**: the hour, minute and day wheels are transform-driven with 1:1 dragging, correct momentum, 40 px snapping and a rubber-band at both ends; the pill keeps the location typography and the tag pencil sits on the same inset as the search icon.
+- **Sharing**: the story export is a full-bleed 1080×1920 design instead of a 4:5 card pasted on a gradient, and X/WhatsApp/Facebook open their own composers while Instagram and the generic Share keep the native sheet with the image.
 - **Resilience**: skeleton rows during the first gallery load and every append; the offline toast carries a retry button and survives unrelated successful requests.
 - **iPhone**: the page tint follows the screen on `theme-color`, `html` and `body` — a single theme-color meta so light-mode devices stop overriding it, a route-aware value before first paint, and the document background continuing the horizon glow under the browser chrome.
 - **Submit dialog**: the upload action is a real footer pinned to the card edge, so scrolled swatches can never appear beneath it.
