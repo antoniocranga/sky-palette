@@ -766,8 +766,17 @@ test.describe("Sky Palette app", () => {
         await expect(scrim).toHaveCSS("z-index", "35");
         const styles = await scrim.evaluate((element) => {
           const style = getComputedStyle(element);
-          return { backgroundImage: style.backgroundImage, height: element.getBoundingClientRect().height };
+          return {
+            display: style.display,
+            backgroundImage: style.backgroundImage,
+            height: element.getBoundingClientRect().height,
+          };
         });
+        // Some screens intentionally hide a scrim under floating browser chrome.
+        if (styles.display === "none") {
+          expect(styles.height, `${label} ${id} hidden height`).toBe(0);
+          continue;
+        }
         expect(styles.backgroundImage, `${label} ${id} gradient`).toContain("linear-gradient");
         expect(styles.height, `${label} ${id} fade height`).toBeGreaterThan(0);
       }
@@ -1981,78 +1990,6 @@ test.describe("Sky Palette app", () => {
     }
   });
 
-  test("story frame is a full-bleed 9:16 design, not a card on a background", async ({ page }) => {
-    await stubShareApi(page, { canShare: true });
-    await gotoHome(page);
-    await page.locator("#dock-share-btn").click();
-    await expect(page.locator("#share-modal")).toHaveAttribute("data-card-style", "studio", { timeout: 10_000 });
-
-    const palette = await page.evaluate(() => {
-      const read = (index: number): number[] => {
-        const element = document.querySelector<HTMLElement>(`#card-variant-studio .swatch-val-${index}`);
-        const match = element ? /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(element).backgroundColor) : null;
-        return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [];
-      };
-      return [read(0), read(3)];
-    });
-
-    await page.locator("#share-instagram").click();
-    await expect.poll(() => page.evaluate(() => (window as Window & { __shareFiles?: File[] }).__shareFiles?.length ?? 0)).toBe(1);
-    const analysis = await page.evaluate(async () => {
-      const file = (window as Window & { __shareFiles?: File[] }).__shareFiles?.at(-1);
-      if (!file) return null;
-      const url = URL.createObjectURL(file);
-      const image = new Image();
-      image.src = url;
-      await image.decode();
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width;
-      canvas.height = image.height;
-      const context = canvas.getContext("2d");
-      if (!context) return null;
-      context.drawImage(image, 0, 0);
-      const width = canvas.width;
-      const height = canvas.height;
-      const data = context.getImageData(0, 0, width, height).data;
-      const pixel = (x: number, y: number): number[] => {
-        const index = (y * width + x) * 4;
-        return [data[index] ?? 255, data[index + 1] ?? 255, data[index + 2] ?? 255];
-      };
-      let uniformWhiteRow = false;
-      let whiteBandRows = 0;
-      for (let y = 0; y < height; y += 1) {
-        let white = 0;
-        for (let x = 0; x < width; x += 1) {
-          const index = (y * width + x) * 4;
-          if (data[index] === 250 && data[index + 1] === 250 && data[index + 2] === 252) white += 1;
-        }
-        if (white === width) uniformWhiteRow = true;
-        if ((y < 180 || y >= height - 180) && white > width * 0.25) whiteBandRows += 1;
-      }
-      URL.revokeObjectURL(url);
-      return {
-        width,
-        height,
-        topLeft: pixel(0, 0),
-        bottomLeft: pixel(0, height - 1),
-        uniformWhiteRow,
-        whiteBandRows,
-      };
-    });
-    expect(analysis).not.toBeNull();
-    if (!analysis) return;
-    expect(analysis.width).toBe(1080);
-    expect(analysis.height).toBe(1920);
-    const closeColor = (actual: number[], expected: number[]): boolean =>
-      actual.length === expected.length && actual.every((value, index) => Math.abs(value - (expected[index] ?? 0)) <= 2);
-    expect(closeColor(analysis.topLeft, palette[0] ?? []), `top ${analysis.topLeft.join(",")}`).toBe(true);
-    expect(closeColor(analysis.bottomLeft, palette[1] ?? []), `bottom ${analysis.bottomLeft.join(",")}`).toBe(true);
-    expect(analysis.topLeft).not.toEqual([255, 255, 255]);
-    expect(analysis.bottomLeft).not.toEqual([255, 255, 255]);
-    expect(analysis.uniformWhiteRow).toBe(false);
-    expect(analysis.whiteBandRows).toBe(0);
-  });
-
   test("only the in-flight native control disables; link composers stay live", async ({ page }) => {
     await stubShareApi(page, { canShare: true, hold: true });
     await gotoHome(page);
@@ -2348,7 +2285,7 @@ test.describe("Sky Palette app", () => {
       await expect.poll(() =>
         page.evaluate(() => (window as Window & { __shareFiles?: File[] }).__shareFiles?.length ?? 0),
       ).toBe(index + 1);
-      const result = await page.evaluate(async () => {
+      const result = await page.evaluate(async (styleName) => {
         const files = (window as Window & { __shareFiles?: File[] }).__shareFiles ?? [];
         const file = files[files.length - 1];
         if (!file) return null;
@@ -2363,7 +2300,9 @@ test.describe("Sky Palette app", () => {
         if (!context) return null;
         context.drawImage(image, 0, 0);
         URL.revokeObjectURL(url);
-        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const width = canvas.width;
+        const height = canvas.height;
+        const pixels = context.getImageData(0, 0, width, height).data;
         const active = document.querySelector<HTMLElement>(".card-variant.is-active");
         const colors = active
           ? Array.from(active.querySelectorAll<HTMLElement>(".swatch-val-0, .swatch-val-1, .swatch-val-2, .swatch-val-3, .swatch-val-4")).map((element) => {
@@ -2371,24 +2310,77 @@ test.describe("Sky Palette app", () => {
               return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [];
             })
           : [];
-        const found = colors.map(([r = -1, g = -1, b = -1]) => {
-          for (let pixel = 0; pixel < pixels.length; pixel += 16) {
-            if (pixels[pixel] === r && pixels[pixel + 1] === g && pixels[pixel + 2] === b) return true;
+        const backgrounds = {
+          studio: [250, 250, 252],
+          telemetry: [11, 13, 18],
+          horizon: [14, 17, 26],
+          monolith: [0, 0, 0],
+        } as const;
+        const backgroundList = Object.values(backgrounds);
+        const expected = backgrounds[styleName as keyof typeof backgrounds];
+        const near = (r: number, g: number, b: number, target: readonly number[], tolerance = 2): boolean =>
+          Math.abs(r - (target[0] ?? 0)) <= tolerance &&
+          Math.abs(g - (target[1] ?? 0)) <= tolerance &&
+          Math.abs(b - (target[2] ?? 0)) <= tolerance;
+        const backgroundCounts = backgroundList.map((target) => {
+          let count = 0;
+          for (let pixel = 0; pixel < pixels.length; pixel += 4) {
+            if (near(pixels[pixel] ?? 0, pixels[pixel + 1] ?? 0, pixels[pixel + 2] ?? 0, target)) count += 1;
           }
-          return false;
+          return count;
         });
+        const paletteCounts = colors.map(([r = 0, g = 0, b = 0]) => {
+          let count = 0;
+          for (let pixel = 0; pixel < pixels.length; pixel += 4) {
+            if (
+              Math.abs((pixels[pixel] ?? 0) - r) <= 1 &&
+              Math.abs((pixels[pixel + 1] ?? 0) - g) <= 1 &&
+              Math.abs((pixels[pixel + 2] ?? 0) - b) <= 1
+            ) {
+              count += 1;
+            }
+          }
+          return count;
+        });
+        let wrongBackgroundRows = 0;
+        const bands = [0, Math.max(0, height - 180)];
+        for (const bandStart of bands) {
+          const bandEnd = Math.min(height, bandStart + 180);
+          for (let y = bandStart; y < bandEnd; y += 1) {
+            const offset = y * width * 4;
+            const r = pixels[offset] ?? 0;
+            const g = pixels[offset + 1] ?? 0;
+            const b = pixels[offset + 2] ?? 0;
+            let uniform = true;
+            for (let x = 1; x < width; x += 1) {
+              const index = (y * width + x) * 4;
+              if (pixels[index] !== r || pixels[index + 1] !== g || pixels[index + 2] !== b) {
+                uniform = false;
+                break;
+              }
+            }
+            if (uniform && !near(r, g, b, expected, 3)) wrongBackgroundRows += 1;
+          }
+        }
         let hash = 2166136261;
         for (let pixel = 0; pixel < pixels.length; pixel += 64) {
           hash ^= pixels[pixel] ?? 0;
           hash = Math.imul(hash, 16777619) >>> 0;
         }
-        return { width: canvas.width, height: canvas.height, found, hash };
-      });
+        return { width, height, paletteCounts, backgroundCounts, wrongBackgroundRows, hash };
+      }, style);
       expect(result).not.toBeNull();
       if (!result) return;
       expect(result.width).toBe(1080);
       expect(result.height).toBe(1920);
-      expect(result.found).toEqual([true, true, true, true, true]);
+      expect(result.paletteCounts.every((count) => count > 500), `palette ${result.paletteCounts.join(",")}`).toBe(true);
+      const expectedIndex = styles.indexOf(style);
+      expect(result.backgroundCounts[expectedIndex], `dominant ${style}`).toBeGreaterThan(100_000);
+      result.backgroundCounts.forEach((count, backgroundIndex) => {
+        if (backgroundIndex === expectedIndex) return;
+        expect(result.backgroundCounts[expectedIndex], `${style} beats background ${backgroundIndex}`).toBeGreaterThan(count);
+      });
+      expect(result.wrongBackgroundRows, `${style} wrong top/bottom rows`).toBe(0);
       hashes.push(result.hash);
     }
     expect(new Set(hashes).size).toBe(styles.length);
@@ -2844,6 +2836,28 @@ test.describe("Sky Palette app", () => {
     });
     expect(backgrounds.dark).toBe("rgba(0, 0, 0, 0)");
     expect(backgrounds.light).toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("home keeps the sky under floating browser chrome", async ({ page }) => {
+    await gotoHome(page);
+    const scrims = await page.evaluate(() => ({
+      bottom: getComputedStyle(document.querySelector("#safe-bottom-scrim")!).display,
+      backdrop: getComputedStyle(document.querySelector("#sky-backdrop")!).height,
+      after: getComputedStyle(document.querySelector("#sky-backdrop")!, "::after").height,
+      tint: getComputedStyle(document.documentElement).backgroundColor,
+    }));
+    // A bottom scrim over the hero darkens the strip under Safari's floating bar.
+    expect(scrims.bottom).toBe("none");
+    expect(scrims.after).not.toBe("0px");
+    expect(scrims.backdrop).not.toBe("0px");
+
+    await gotoGallery(page);
+    await expect(page.locator("#safe-bottom-scrim")).not.toHaveCSS("display", "none");
+    // On phones the mosaic starts one rem down, so a top scrim would float;
+    // above 640 px the grid starts at 0 and the scrim still darkens the tiles.
+    const narrow = (page.viewportSize()?.width ?? 0) < 640;
+    const topScrim = await page.locator("#safe-top-scrim").evaluate((el) => getComputedStyle(el).display);
+    expect(topScrim).toBe(narrow ? "none" : "block");
   });
 
   test("safe areas stay continuous at 393x852", async ({ page }) => {

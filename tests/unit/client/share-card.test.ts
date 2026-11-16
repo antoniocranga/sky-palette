@@ -5,6 +5,7 @@ import {
   SHARE_SITE,
   STORY_LAYOUT,
   STORY_SIZE,
+  footerLayout,
   sharePngFilename,
   storyContent,
   storyTextInsideSafeArea,
@@ -100,4 +101,47 @@ describe("card handle meta", () => {
   it.each(["studio", "telemetry", "horizon", "monolith"] as const)("%s artwork includes the tag", (style) => {
     expect(cardMetaText(style, snapshot, "sky-bucharest-48b")).toContain("@sky-bucharest-48b");
   });
+});
+describe("footer layout", () => {
+  const left = 80;
+  const right = 1000;
+  const gap = 32;
+  const site = "skypalette.app";
+  const short = "16:15 · Golden Hour · @sky-bucharest-48b";
+  const extra = "16:15 · Golden Hour · @sky-bucharest-extra8";
+  const veryLong = "16:15 · Golden Hour · @sky-bucharest-extra8-abcdefghijklmnop";
+  const unbreakable = "16:15 · Golden Hour · a phase name long enough to need truncation · @sky-bucharest-extra8";
+  const widths = { card: 13, story: 18.5 } as const;
+
+  for (const [kind, charWidth] of Object.entries(widths)) {
+    const measure = (text: string): number => text.length * charWidth;
+
+    it(`keeps full short and long-handle meta lines clear on the ${kind} footer`, () => {
+      for (const meta of [short, extra, veryLong]) {
+        const result = footerLayout(measure, meta, site, left, right, gap);
+        expect(result.metaRight).toBeLessThanOrEqual(result.siteLeft - gap);
+        expect(result.siteLeft).toBe(right - measure(site));
+        expect(result.truncated).toBe(false);
+        expect(result.meta.endsWith("…")).toBe(false);
+      }
+    });
+
+    it(`drops the handle before truncating date and phase on the ${kind} footer`, () => {
+      const result = footerLayout(measure, extra, site, left, right, gap);
+      if (result.meta !== extra) {
+        expect(result.meta).toContain("16:15 · Golden Hour");
+        expect(result.meta).not.toContain("@");
+        expect(result.truncated).toBe(false);
+      }
+      expect(result.metaRight).toBeLessThanOrEqual(result.siteLeft - gap);
+    });
+
+    it(`ellipsises only when the meta cannot fit even without its handle on the ${kind} footer`, () => {
+      const result = footerLayout(measure, unbreakable, site, left, right, gap);
+      expect(result.truncated).toBe(true);
+      expect(result.meta.endsWith("…")).toBe(true);
+      expect(result.metaRight).toBeLessThanOrEqual(result.siteLeft - gap);
+      expect(result.metaRight).toBeLessThan(result.siteLeft);
+    });
+  }
 });

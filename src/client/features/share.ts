@@ -13,7 +13,7 @@ import {
   formatDateUpper,
   formatElevation,
 } from "../lib/format";
-import { CARD_SIZE, STORY_LAYOUT, STORY_SIZE, sharePngFilename, storyContent } from "../lib/share-card";
+import { CARD_SIZE, STORY_SIZE, footerLayout, sharePngFilename } from "../lib/share-card";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, isoDayInZone } from "../../shared/time";
@@ -440,225 +440,43 @@ export async function renderCard(style: CardStyle, snapshot: ShareSnapshot, canv
   return canvasToPng(surface);
 }
 
-function drawCardStyle(context: CanvasRenderingContext2D, style: CardStyle, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+function drawCardStyle(
+  context: CanvasRenderingContext2D,
+  style: CardStyle,
+  snapshot: ShareSnapshot,
+  colors: string[],
+  handle: string,
+  height: number = CARD_SIZE.height,
+): void {
   switch (style) {
     case "studio":
-      drawStudio(context, snapshot, colors, handle);
+      drawStudio(context, snapshot, colors, handle, height);
       break;
     case "telemetry":
-      drawTelemetry(context, snapshot, colors, handle);
+      drawTelemetry(context, snapshot, colors, handle, height);
       break;
     case "horizon":
-      drawHorizon(context, snapshot, colors, handle);
+      drawHorizon(context, snapshot, colors, handle, height);
       break;
     case "monolith":
-      drawMonolith(context, snapshot, colors, handle);
+      drawMonolith(context, snapshot, colors, handle, height);
       break;
   }
 }
 
-/** 1080 × 1920 Story: one full-bleed palette frame, not a card on a backdrop. */
+/**
+ * The 9:16 story is the selected card stretched vertically: same horizontal
+ * anchors, colours, type and elements, with y positions, gaps and font sizes
+ * multiplied by height / 1350.
+ */
 export async function renderStory(style: CardStyle, snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null, handle = ""): Promise<Blob> {
   const surface = canvas ?? document.createElement("canvas");
   surface.width = STORY_SIZE.width;
   surface.height = STORY_SIZE.height;
   const context = surface.getContext("2d");
   if (!context) throw new Error("Canvas 2D unavailable");
-  drawStoryFrame(context, style, snapshot, handle);
+  drawCardStyle(context, style, snapshot, swatches(snapshot.palette), handle, STORY_SIZE.height);
   return canvasToPng(surface);
-}
-
-interface StoryTreatment {
-  eyebrowFont: string;
-  cityFont: string;
-  coordsFont: string;
-  cityText: string;
-  ink: string;
-  muted: string;
-  panelFill: string;
-  panelStroke: string;
-  pillFill: string;
-  pillInk: string;
-  rule: string;
-  hex: string;
-  swatchRadius: number;
-}
-
-function storyTreatment(style: CardStyle, city: string): StoryTreatment {
-  switch (style) {
-    case "studio":
-      return {
-        eyebrowFont: `500 20px ${MONO}`,
-        cityFont: `700 112px ${SANS}`,
-        coordsFont: `400 22px ${MONO}`,
-        cityText: city.toUpperCase(),
-        ink: "#FFFFFF",
-        muted: "rgba(255,255,255,0.72)",
-        panelFill: "rgba(9,9,11,0.30)",
-        panelStroke: "rgba(255,255,255,0.18)",
-        pillFill: "#09090B",
-        pillInk: "#FFFFFF",
-        rule: "rgba(255,255,255,0.18)",
-        hex: "rgba(255,255,255,0.72)",
-        swatchRadius: 28,
-      };
-    case "telemetry":
-      return {
-        eyebrowFont: `700 20px ${MONO}`,
-        cityFont: `700 96px ${MONO}`,
-        coordsFont: `400 20px ${MONO}`,
-        cityText: city.toUpperCase(),
-        ink: "#FFFFFF",
-        muted: "rgba(255,255,255,0.55)",
-        panelFill: "rgba(0,0,0,0.45)",
-        panelStroke: "rgba(255,255,255,0.14)",
-        pillFill: "#0B0D12",
-        pillInk: "#FCD34D",
-        rule: "rgba(255,255,255,0.14)",
-        hex: "rgba(255,255,255,0.62)",
-        swatchRadius: 16,
-      };
-    case "horizon":
-      return {
-        eyebrowFont: `500 20px ${MONO}`,
-        cityFont: `italic 600 104px ${SERIF}`,
-        coordsFont: `400 22px ${MONO}`,
-        cityText: `Sky above ${city}`,
-        ink: "#FEF3C7",
-        muted: "rgba(254,243,199,0.65)",
-        panelFill: "rgba(14,17,26,0.34)",
-        panelStroke: "rgba(254,243,199,0.18)",
-        pillFill: "#FEF3C7",
-        pillInk: "#0E111A",
-        rule: "rgba(254,243,199,0.18)",
-        hex: "rgba(254,243,199,0.70)",
-        swatchRadius: 32,
-      };
-    case "monolith":
-      return {
-        eyebrowFont: `700 20px ${SANS}`,
-        cityFont: `700 104px ${SANS}`,
-        coordsFont: `400 20px ${MONO}`,
-        cityText: city.toUpperCase(),
-        ink: "#FFFFFF",
-        muted: "rgba(255,255,255,0.58)",
-        panelFill: "rgba(0,0,0,0.48)",
-        panelStroke: "rgba(255,255,255,0.16)",
-        pillFill: "#FFFFFF",
-        pillInk: "#000000",
-        rule: "rgba(255,255,255,0.16)",
-        hex: "rgba(255,255,255,0.60)",
-        swatchRadius: 0,
-      };
-  }
-}
-
-function drawStoryFrame(context: CanvasRenderingContext2D, style: CardStyle, snapshot: ShareSnapshot, handle: string): void {
-  const layout = STORY_LAYOUT;
-  const content = storyContent(snapshot);
-  const treatment = storyTreatment(style, snapshot.city.name);
-  const left = layout.margin;
-  const right = layout.width - layout.margin;
-  const width = right - left;
-  drawStoryBackdrop(context, snapshot);
-
-  context.textAlign = "left";
-  context.fillStyle = treatment.muted;
-  context.font = treatment.eyebrowFont;
-  context.fillText(content.eyebrow, left, layout.contentTop + 22);
-
-  // Date pill at the top safe margin.
-  context.font = `500 22px ${MONO}`;
-  const pillWidth = context.measureText(content.date).width + 56;
-  const pillHeight = 56;
-  const pillX = right - pillWidth;
-  const pillY = layout.contentTop;
-  context.fillStyle = treatment.pillFill;
-  context.beginPath();
-  context.roundRect(pillX, pillY, pillWidth, pillHeight, 28);
-  context.fill();
-  context.fillStyle = treatment.pillInk;
-  context.textAlign = "center";
-  context.fillText(content.date, pillX + pillWidth / 2, pillY + 36);
-  context.textAlign = "left";
-
-  context.save();
-  context.shadowColor = "rgba(0,0,0,0.28)";
-  context.shadowBlur = 18;
-  context.fillStyle = treatment.ink;
-  context.font = treatment.cityFont;
-  context.fillText(treatment.cityText, left, layout.contentTop + 142, width);
-  context.restore();
-
-  context.fillStyle = treatment.muted;
-  context.font = treatment.coordsFont;
-  context.fillText(content.coords, left, layout.contentTop + 188, width);
-
-  drawSwatchRow(context, content.colors, left, layout.swatchTop, width, layout.swatchHeight, treatment.swatchRadius);
-  drawHexRow(context, content.hexes, left, layout.hexBaseline, width, treatment.hex, 18);
-
-  const panelX = left;
-  const panelY = layout.panelTop;
-  const panelW = width;
-  const panelH = layout.panelHeight;
-  const pad = 36;
-  context.fillStyle = treatment.panelFill;
-  context.beginPath();
-  context.roundRect(panelX, panelY, panelW, panelH, 24);
-  context.fill();
-  context.strokeStyle = treatment.panelStroke;
-  context.lineWidth = 2;
-  context.stroke();
-
-  const handleTag = handle ? `@${handle}` : content.handle;
-  context.fillStyle = treatment.ink;
-  context.font = `600 26px ${MONO}`;
-  context.fillText(`${content.time} · ${content.phase} · ${handleTag}`, panelX + pad, panelY + 58, panelW - pad * 2);
-
-  context.strokeStyle = treatment.rule;
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(panelX + pad, panelY + 88);
-  context.lineTo(panelX + panelW - pad, panelY + 88);
-  context.stroke();
-
-  const columns = [panelX + pad, panelX + panelW / 2 + 12];
-  const rows = [
-    [content.metrics[0], content.metrics[1]],
-    [content.metrics[2], content.metrics[3]],
-  ];
-  rows.forEach((row, rowIndex) => {
-    row.forEach((metric, columnIndex) => {
-      if (!metric) return;
-      const x = columns[columnIndex] ?? columns[0]!;
-      const labelY = panelY + 134 + rowIndex * 82;
-      context.fillStyle = treatment.muted;
-      context.font = `500 16px ${MONO}`;
-      context.fillText(metric.label, x, labelY);
-      context.fillStyle = treatment.ink;
-      context.font = `600 28px ${MONO}`;
-      context.fillText(metric.value, x, labelY + 36, panelW / 2 - pad - 12);
-    });
-  });
-
-  context.fillStyle = treatment.muted;
-  context.font = `500 22px ${MONO}`;
-  context.textAlign = "right";
-  context.fillText(content.site, panelX + panelW - pad, panelY + panelH - 24);
-  context.textAlign = "left";
-
-  context.strokeStyle = treatment.rule;
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(left, layout.footerRule);
-  context.lineTo(right, layout.footerRule);
-  context.stroke();
-  context.fillStyle = treatment.muted;
-  context.font = `500 18px ${MONO}`;
-  context.fillText("ONE SKY · FIVE COLOURS", left, layout.footerBaseline);
-  context.textAlign = "right";
-  context.fillText("SKY PALETTE", right, layout.footerBaseline);
-  context.textAlign = "left";
 }
 
 function swatches(palette: Palette): string[] {
@@ -705,188 +523,283 @@ function drawHexRow(
   context.textAlign = "left";
 }
 
-function drawStoryBackdrop(context: CanvasRenderingContext2D, snapshot: ShareSnapshot): void {
-  const width = STORY_SIZE.width;
-  const height = STORY_SIZE.height;
-  const palette = snapshot.palette;
-  const bg = context.createLinearGradient(0, 0, 0, height);
-  bg.addColorStop(0, palette.zenith);
-  bg.addColorStop(0.42, palette.midsky);
-  bg.addColorStop(0.74, palette.horizon);
-  bg.addColorStop(0.995, palette.sunglow);
-  bg.addColorStop(1, palette.sunglow);
-  context.fillStyle = bg;
-  context.fillRect(0, 0, width, height);
+function fitFont(
+  context: CanvasRenderingContext2D,
+  text: string,
+  basePx: number,
+  scale: number,
+  weight: string,
+  family: string,
+  maxWidth: number,
+): number {
+  const size = basePx * scale;
+  context.font = `${weight} ${size}px ${family}`;
+  const measured = context.measureText(text).width;
+  if (measured <= maxWidth) return Math.round(size);
+  return Math.max(12, Math.round((size * maxWidth) / measured));
 }
 
-function drawStudio(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+function drawFooterLine(
+  context: CanvasRenderingContext2D,
+  metaText: string,
+  siteText: string,
+  left: number,
+  right: number,
+  baseline: number,
+  metaFont: string,
+  siteFont: string,
+  metaColor: string,
+  siteColor: string,
+): void {
+  const layout = footerLayout(
+    (text) => {
+      context.font = text === siteText ? siteFont : metaFont;
+      return context.measureText(text).width;
+    },
+    metaText,
+    siteText,
+    left,
+    right,
+    32,
+  );
+  context.fillStyle = metaColor;
+  context.font = metaFont;
+  context.fillText(layout.meta, left, baseline, layout.maxMetaWidth);
+  context.textAlign = "right";
+  context.fillStyle = siteColor;
+  context.font = siteFont;
+  context.fillText(siteText, right, baseline);
+  context.textAlign = "left";
+}
+
+function drawStudio(
+  context: CanvasRenderingContext2D,
+  snapshot: ShareSnapshot,
+  colors: string[],
+  handle: string,
+  height: number,
+): void {
   const width = CARD_SIZE.width;
-  const height = CARD_SIZE.height;
+  const s = height / CARD_SIZE.height;
+  const y = (value: number): number => value * s;
+  const f = (value: number): number => Math.round(value * s);
   context.fillStyle = "#FAFAFC";
   context.fillRect(0, 0, width, height);
 
   context.fillStyle = "#71717A";
-  context.font = `500 22px ${MONO}`;
-  context.fillText("SKY PALETTE", 80, 120);
+  context.font = `500 ${f(22)}px ${MONO}`;
+  context.fillText("SKY PALETTE", 80, y(120));
 
+  const city = snapshot.city.name.toUpperCase();
+  const cityPx = fitFont(context, city, 78, s, "700", SANS, 700);
   context.fillStyle = "#09090B";
-  context.font = `700 78px ${SANS}`;
-  context.fillText(snapshot.city.name.toUpperCase(), 80, 250, 700);
+  context.font = `700 ${cityPx}px ${SANS}`;
+  context.fillText(city, 80, y(250), 700);
   context.fillStyle = "#52525B";
-  context.font = `400 26px ${MONO}`;
-  context.fillText(formatCoordinates(snapshot.city.lat, snapshot.city.lon), 80, 300);
+  context.font = `400 ${f(26)}px ${MONO}`;
+  context.fillText(formatCoordinates(snapshot.city.lat, snapshot.city.lon), 80, y(300));
 
   // Date pill
   const dateLabel = formatDateUpper(snapshot.dateIso);
-  context.font = `500 24px ${MONO}`;
+  context.font = `500 ${f(24)}px ${MONO}`;
   const pillWidth = context.measureText(dateLabel).width + 56;
+  const pillHeight = 56 * s;
+  const pillX = width - 80 - pillWidth;
+  const pillY = y(92);
   context.fillStyle = "#09090B";
   context.beginPath();
-  context.roundRect(width - 80 - pillWidth, 92, pillWidth, 56, 28);
+  context.roundRect(pillX, pillY, pillWidth, pillHeight, pillHeight / 2);
   context.fill();
   context.fillStyle = "#FFFFFF";
   context.textAlign = "center";
-  context.fillText(dateLabel, width - 80 - pillWidth / 2, 128);
+  context.fillText(dateLabel, pillX + pillWidth / 2, pillY + 36 * s);
   context.textAlign = "left";
 
-  drawSwatchRow(context, colors, 80, 430, width - 160, 600, 28);
-  drawHexRow(context, colors, 80, 1090, width - 160, "#52525B");
+  drawSwatchRow(context, colors, 80, y(430), width - 160, 600 * s, Math.round(28 * s));
+  drawHexRow(context, colors, 80, y(1090), width - 160, "#52525B", f(18));
 
   context.strokeStyle = "rgba(9,9,11,0.10)";
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(80, 1170);
-  context.lineTo(width - 80, 1170);
+  context.moveTo(80, y(1170));
+  context.lineTo(width - 80, y(1170));
   context.stroke();
 
-  context.fillStyle = "#3F3F46";
-  context.font = `400 22px ${MONO}`;
-  context.fillText(cardMetaText("studio", snapshot, handle), 80, 1230, 760);
-  context.textAlign = "right";
-  context.fillStyle = "#09090B";
-  context.font = `600 22px ${MONO}`;
-  context.fillText("skypalette.app", width - 80, 1230);
+  drawFooterLine(
+    context,
+    cardMetaText("studio", snapshot, handle),
+    "skypalette.app",
+    80,
+    width - 80,
+    y(1230),
+    `400 ${f(22)}px ${MONO}`,
+    `600 ${f(22)}px ${MONO}`,
+    "#3F3F46",
+    "#09090B",
+  );
   context.textAlign = "left";
 }
 
-function drawTelemetry(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+function drawTelemetry(
+  context: CanvasRenderingContext2D,
+  snapshot: ShareSnapshot,
+  colors: string[],
+  handle: string,
+  height: number,
+): void {
   const width = CARD_SIZE.width;
-  const height = CARD_SIZE.height;
+  const s = height / CARD_SIZE.height;
+  const y = (value: number): number => value * s;
+  const f = (value: number): number => Math.round(value * s);
   context.fillStyle = "#0B0D12";
   context.fillRect(0, 0, width, height);
 
+  const city = snapshot.city.name.toUpperCase();
+  const cityPx = fitFont(context, city, 56, s, "700", MONO, width - 160);
   context.fillStyle = "#FFFFFF";
-  context.font = `700 56px ${MONO}`;
-  context.fillText(snapshot.city.name.toUpperCase(), 80, 230, width - 160);
+  context.font = `700 ${cityPx}px ${MONO}`;
+  context.fillText(city, 80, y(230), width - 160);
   context.fillStyle = "rgba(255,255,255,0.55)";
-  context.font = `400 22px ${MONO}`;
+  context.font = `400 ${f(22)}px ${MONO}`;
   context.fillText(
     `${formatCoordinates(snapshot.city.lat, snapshot.city.lon, 2)} · ${snapshot.city.country.toUpperCase()}`,
     80,
-    274,
+    y(274),
     width - 160,
   );
 
-  drawSwatchRow(context, colors, 80, 360, width - 160, 400, 16);
-  drawHexRow(context, colors, 80, 812, width - 160, "rgba(255,255,255,0.60)");
+  drawSwatchRow(context, colors, 80, y(360), width - 160, 400 * s, Math.round(16 * s));
+  drawHexRow(context, colors, 80, y(812), width - 160, "rgba(255,255,255,0.60)", f(18));
 
   // Metrics
   context.fillStyle = "rgba(255,255,255,0.05)";
   context.beginPath();
-  context.roundRect(80, 880, width - 160, 190, 20);
+  context.roundRect(80, y(880), width - 160, 190 * s, Math.round(20 * s));
   context.fill();
   context.strokeStyle = "rgba(255,255,255,0.12)";
   context.lineWidth = 2;
   context.stroke();
 
   context.fillStyle = "rgba(255,255,255,0.45)";
-  context.font = `400 20px ${MONO}`;
-  context.fillText("SUNSET", 124, 936);
-  context.fillText("SOLAR ARC", 590, 936);
+  context.font = `400 ${f(20)}px ${MONO}`;
+  context.fillText("SUNSET", 124, y(936));
+  context.fillText("SOLAR ARC", 590, y(936));
   context.fillStyle = "#FFFFFF";
-  context.font = `700 44px ${MONO}`;
-  context.fillText(snapshot.sunsetLabel, 124, 1000);
+  context.font = `700 ${f(44)}px ${MONO}`;
+  context.fillText(snapshot.sunsetLabel, 124, y(1000));
   context.fillStyle = "#FCD34D";
-  context.fillText(formatElevation(snapshot.elevation), 590, 1000);
+  context.fillText(formatElevation(snapshot.elevation), 590, y(1000));
 
-  context.fillStyle = "rgba(255,255,255,0.45)";
-  context.font = `400 20px ${MONO}`;
-  context.fillText(cardMetaText("telemetry", snapshot, handle), 80, 1210, 700);
-  context.textAlign = "right";
-  context.fillStyle = "rgba(255,255,255,0.75)";
-  context.fillText("skypalette.app", width - 80, 1210);
+  drawFooterLine(
+    context,
+    cardMetaText("telemetry", snapshot, handle),
+    "skypalette.app",
+    80,
+    width - 80,
+    y(1210),
+    `400 ${f(20)}px ${MONO}`,
+    `400 ${f(20)}px ${MONO}`,
+    "rgba(255,255,255,0.45)",
+    "rgba(255,255,255,0.75)",
+  );
   context.textAlign = "left";
 }
 
-function drawHorizon(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+function drawHorizon(
+  context: CanvasRenderingContext2D,
+  snapshot: ShareSnapshot,
+  colors: string[],
+  handle: string,
+  height: number,
+): void {
   const width = CARD_SIZE.width;
-  const height = CARD_SIZE.height;
+  const s = height / CARD_SIZE.height;
+  const y = (value: number): number => value * s;
+  const f = (value: number): number => Math.round(value * s);
   context.fillStyle = "#0E111A";
   context.fillRect(0, 0, width, height);
-  const glow = context.createRadialGradient(width / 2, height + 60, 40, width / 2, height + 60, 900);
+  const glow = context.createRadialGradient(width / 2, height + 60 * s, 40 * s, width / 2, height + 60 * s, 900 * s);
   glow.addColorStop(0, "rgba(224,96,56,0.38)");
   glow.addColorStop(0.65, "rgba(224,96,56,0.08)");
   glow.addColorStop(1, "rgba(14,17,26,0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
 
+  const city = `Sky above ${snapshot.city.name}`;
+  const cityPx = fitFont(context, city, 66, s, "italic 600", SERIF, width - 160);
   context.fillStyle = "#FEF3C7";
-  context.font = `italic 600 66px ${SERIF}`;
-  context.fillText(`Sky above ${snapshot.city.name}`, 80, 236, width - 160);
+  context.font = `italic 600 ${cityPx}px ${SERIF}`;
+  context.fillText(city, 80, y(236), width - 160);
 
   context.fillStyle = "rgba(255,255,255,0.55)";
-  context.font = `400 24px ${MONO}`;
-  context.fillText(`${snapshot.phase} · ${snapshot.timeLabel}`, 80, 286);
+  context.font = `400 ${f(24)}px ${MONO}`;
+  context.fillText(`${snapshot.phase} · ${snapshot.timeLabel}`, 80, y(286));
 
-  drawSwatchRow(context, colors, 80, 460, width - 160, 520, 32);
+  drawSwatchRow(context, colors, 80, y(460), width - 160, 520 * s, Math.round(32 * s));
   context.fillStyle = "rgba(253,230,138,0.65)";
-  context.font = `400 22px ${MONO}`;
-  context.fillText("ZENITH", 80, 1042);
+  context.font = `400 ${f(22)}px ${MONO}`;
+  context.fillText("ZENITH", 80, y(1042));
   context.textAlign = "center";
-  context.fillText("HORIZON", width / 2, 1042);
+  context.fillText("HORIZON", width / 2, y(1042));
   context.textAlign = "right";
-  context.fillText("SUN GLOW", width - 80, 1042);
+  context.fillText("SUN GLOW", width - 80, y(1042));
   context.textAlign = "left";
 
   context.strokeStyle = "rgba(255,255,255,0.12)";
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(80, 1160);
-  context.lineTo(width - 80, 1160);
+  context.moveTo(80, y(1160));
+  context.lineTo(width - 80, y(1160));
   context.stroke();
 
-  context.fillStyle = "rgba(254,243,199,0.7)";
-  context.font = `400 22px ${MONO}`;
-  context.fillText(cardMetaText("horizon", snapshot, handle), 80, 1220, 760);
-  context.textAlign = "right";
-  context.fillText("skypalette.app", width - 80, 1220);
+  drawFooterLine(
+    context,
+    cardMetaText("horizon", snapshot, handle),
+    "skypalette.app",
+    80,
+    width - 80,
+    y(1220),
+    `400 ${f(22)}px ${MONO}`,
+    `400 ${f(22)}px ${MONO}`,
+    "rgba(254,243,199,0.7)",
+    "rgba(254,243,199,0.7)",
+  );
   context.textAlign = "left";
 }
 
-function drawMonolith(context: CanvasRenderingContext2D, snapshot: ShareSnapshot, colors: string[], handle: string): void {
+function drawMonolith(
+  context: CanvasRenderingContext2D,
+  snapshot: ShareSnapshot,
+  colors: string[],
+  handle: string,
+  height: number,
+): void {
   const width = CARD_SIZE.width;
-  const height = CARD_SIZE.height;
+  const s = height / CARD_SIZE.height;
+  const y = (value: number): number => value * s;
+  const f = (value: number): number => Math.round(value * s);
   context.fillStyle = "#000000";
   context.fillRect(0, 0, width, height);
-  drawSwatchRow(context, colors, 0, 0, width, 980);
+  drawSwatchRow(context, colors, 0, 0, width, 980 * s);
 
+  const city = snapshot.city.name.toUpperCase();
+  const cityPx = fitFont(context, city, 44, s, "700", SANS, 700);
   context.fillStyle = "#FFFFFF";
-  context.font = `700 44px ${SANS}`;
-  context.fillText(snapshot.city.name.toUpperCase(), 64, 1090, 700);
+  context.font = `700 ${cityPx}px ${SANS}`;
+  context.fillText(city, 64, y(1090), 700);
 
-  context.fillStyle = "rgba(255,255,255,0.55)";
-  context.font = `400 20px ${MONO}`;
-  context.fillText(
+  drawFooterLine(
+    context,
     cardMetaText("monolith", snapshot, handle),
+    "skypalette.app",
     64,
-    1132,
-    width - 128,
+    width - 64,
+    y(1132),
+    `400 ${f(20)}px ${MONO}`,
+    `500 ${f(22)}px ${MONO}`,
+    "rgba(255,255,255,0.55)",
+    "rgba(255,255,255,0.9)",
   );
-
-  context.textAlign = "right";
-  context.fillStyle = "rgba(255,255,255,0.9)";
-  context.font = `500 22px ${MONO}`;
-  context.fillText("skypalette.app", width - 64, 1132);
   context.textAlign = "left";
 }
 
