@@ -8,6 +8,25 @@
   <meta name="description" content="Real-time five-swatch sky palettes computed from solar geometry and live cloud layers. Explore 15 days of sunset colour, scrub the sun, share a sky card.">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#0b0d12">
+  <script>
+    /* Before first paint: browsers sample the document background and some
+       only re-read theme-color on load, so a deep link must start correct. */
+    (function () {
+      try {
+        var view = new URLSearchParams(location.search).get("view");
+        var theme = view === "detail" ? "#ffffff" : view === "gallery" ? "#0b0d12" : "#090b10";
+        var surface = view === "detail" ? "#ffffff" : "#0b0d12";
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", theme);
+        document.documentElement.style.backgroundColor = surface;
+        var rule = document.createElement("style");
+        rule.textContent = "body{background-color:" + surface + "}";
+        document.head.appendChild(rule);
+      } catch (error) {
+        /* Non-blocking: the runtime tint corrects it after boot. */
+      }
+    })();
+  </script>
   <link rel="canonical" href="https://skypalette.app">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">

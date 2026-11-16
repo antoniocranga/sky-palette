@@ -1354,6 +1354,28 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#submit-footer")).toContainText("Protected");
   });
 
+  test("first paint tint comes from the route before the app boots", async ({ page }) => {
+    // Block the app entry so only the inline head script can set the tint.
+    await page.route("**/src/client/main.ts", (route) => route.abort("failed"));
+    await page.goto("/?view=detail", { waitUntil: "domcontentloaded" });
+    const detail = await page.evaluate(() => ({
+      meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
+    }));
+    expect(detail.meta).toBe("#ffffff");
+    expect(detail.html).toBe("rgb(255, 255, 255)");
+    expect(detail.body).toBe("rgb(255, 255, 255)");
+
+    await page.goto("/?view=gallery", { waitUntil: "domcontentloaded" });
+    const gallery = await page.evaluate(() => ({
+      meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
+      html: getComputedStyle(document.documentElement).backgroundColor,
+    }));
+    expect(gallery.meta).toBe("#0b0d12");
+    expect(gallery.html).toBe("rgb(11, 13, 18)");
+  });
+
   test("submit footer is pinned to the card bottom, never floating over content", async ({ page }) => {
     await gotoHome(page);
     await page.locator("#nav-btn-submit").click();
@@ -1386,20 +1408,36 @@ test.describe("Sky Palette app", () => {
     const tint = () => page.evaluate(() => ({
       meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
       html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
     }));
 
     await gotoHome(page);
+    await expect.poll(async () => (await tint()).meta).toMatch(/^#[0-9a-f]{6}$/i);
     const home = await tint();
-    expect(home.meta).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(home.html).toBe(`rgb(${parseInt(home.meta!.slice(1, 3), 16)}, ${parseInt(home.meta!.slice(3, 5), 16)}, ${parseInt(home.meta!.slice(5, 7), 16)})`);
+    // The document background continues the horizon glow under the browser
+    // chrome, while theme-color samples the zenith behind the status bar.
+    const skyBottom = await page.locator("#screen-home").evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("--sky-bottom").trim().toLowerCase(),
+    );
+    expect(skyBottom).toMatch(/^#[0-9a-f]{6}$/);
+    const rgb = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+    expect(home.html).toBe(rgb(skyBottom));
+    expect(home.body).toBe(rgb(skyBottom));
 
     await gotoGallery(page);
     await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
     expect((await tint()).html).toBe("rgb(11, 13, 18)");
+    expect((await tint()).body).toBe("rgb(11, 13, 18)");
 
     await openFirstDay(page);
     await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
     expect((await tint()).html).toBe("rgb(255, 255, 255)");
+    expect((await tint()).body).toBe("rgb(255, 255, 255)");
+
+    // A hard reload on the detail screen ends white, not the dark default.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
+    expect((await tint()).body).toBe("rgb(255, 255, 255)");
 
     await page.locator("#nav-btn-submit").click();
     await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
