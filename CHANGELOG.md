@@ -18,6 +18,7 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 
 ### Fixed
 
+- The strip around an open dialog now uses the scrim composited over the active screen instead of a fixed dark default, removing the dark band above the dimmed white detail screen on iPhone Safari.
 - Photo GPS now resolves through a server-side reverse geocoder (OpenStreetMap Nominatim, cached in D1) instead of the sparse search cache, so a point in Constanța no longer reports a village 18 km inland; a cached city is only trusted within 3 km and the fallback radius dropped from 100 km to 15 km.
 - Uploads read `DateTimeOriginal` from EXIF (JPEG, PNG and WebP) and fill the day and time pills, not just GPS; photos older than the seven-day wheel keep their own day.
 - Gallery pagination stopped after the second page when the sentinel stayed inside the scroller.

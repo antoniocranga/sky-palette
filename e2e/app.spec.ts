@@ -1472,8 +1472,13 @@ test.describe("Sky Palette app", () => {
     await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
     expect((await tint()).body).toBe("rgb(255, 255, 255)");
 
+    // The strip around an open dialog is the scrim composited over this white
+    // screen: rgba(5, 7, 15, 0.72) over #ffffff on touch, 0.55 with a pointer.
+    // A dark strip here read as a band above the dimmed page on a device.
+    const touchScrim = await page.evaluate(() => matchMedia("(hover: none)").matches);
     await page.locator("#nav-btn-submit").click();
-    await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
+    await expect.poll(async () => (await tint()).meta).toBe(touchScrim ? "#4b4c52" : "#75777b");
+    expect((await tint()).body).toBe(touchScrim ? "rgb(75, 76, 82)" : "rgb(117, 119, 123)");
     await page.keyboard.press("Escape");
     await expect(page.locator("#submit-modal")).not.toHaveClass(/is-open/);
     await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
