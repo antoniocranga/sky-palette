@@ -476,6 +476,36 @@ export function makePngWithGps(width: number, height: number, lat: number, lon: 
   return makePng(width, height, [110, 140, 190], buildGpsTiff(lat, lon));
 }
 
+/** PNG whose EXIF carries only a capture instant (no GPS). */
+export function makePngWithTakenAt(width: number, height: number, takenAt: string): Buffer {
+  return makePng(width, height, [120, 170, 210], buildTakenAtTiff(takenAt));
+}
+
+function buildTakenAtTiff(takenAt: string): Buffer {
+  const text = Buffer.from(`${takenAt}\0`, "ascii");
+  const asciiOffset = 44;
+  const bytes = Buffer.alloc(asciiOffset + text.length);
+  bytes.write("II", 0, "ascii");
+  bytes.writeUInt16LE(42, 2);
+  bytes.writeUInt32LE(8, 4);
+  // IFD0: one entry, Exif IFD pointer at 26.
+  bytes.writeUInt16LE(1, 8);
+  bytes.writeUInt16LE(0x8769, 10);
+  bytes.writeUInt16LE(4, 12);
+  bytes.writeUInt32LE(1, 14);
+  bytes.writeUInt32LE(26, 18);
+  bytes.writeUInt32LE(0, 22);
+  // Exif IFD: one entry, DateTimeOriginal at 44.
+  bytes.writeUInt16LE(1, 26);
+  bytes.writeUInt16LE(0x9003, 28);
+  bytes.writeUInt16LE(2, 30);
+  bytes.writeUInt32LE(text.length, 32);
+  bytes.writeUInt32LE(asciiOffset, 36);
+  bytes.writeUInt32LE(0, 40);
+  text.copy(bytes, asciiOffset);
+  return bytes;
+}
+
 function buildGpsTiff(lat: number, lon: number): Buffer {
   const bytes = Buffer.alloc(128);
   bytes.write("II", 0, "ascii");

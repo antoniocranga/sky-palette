@@ -17,6 +17,7 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 
 ### Fixed
 
+- Uploads read `DateTimeOriginal` from EXIF (JPEG, PNG and WebP) and fill the day and time pills, not just GPS; photos older than the seven-day wheel keep their own day.
 - Gallery pagination stopped after the second page when the sentinel stayed inside the scroller.
 - Contributor handles were truncated in three-column tiles.
 - A magenta artefact could appear under the colour preview while a photo loaded; the blurred hex placeholders are back, drawn without live text so the spell-checker cannot underline them.
