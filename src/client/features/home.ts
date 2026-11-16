@@ -10,6 +10,7 @@ import { ApiError, getPalette } from "../api";
 import { isAbortError, qs, registerAction, setHidden, setText } from "../lib/dom";
 import { formatElevation, formatPercent, instantForLocalHour, timeZoneAbbreviation, weatherSummary } from "../lib/format";
 import { HOME_CONTROL_PALETTES, nextHomeToneAt, rulerTextColor, type HomeTone } from "../lib/contrast";
+import { refreshThemeColor } from "../lib/theme";
 import { hexToRgb } from "../lib/color";
 import { Tape, indexForHour } from "../lib/tape";
 import { computePalette } from "../../shared/palette";
@@ -325,6 +326,8 @@ export class HomeFeature {
     const gradient = `radial-gradient(ellipse 90% 40% at 50% 70%, ${palette.sunglow} 0%, transparent 65%), linear-gradient(180deg, ${palette.zenith} 0%, ${palette.midsky} 40%, ${palette.horizon} 72%, ${palette.sunglow} 100%)`;
     if (this.backdrop) this.backdrop.style.background = gradient;
     this.screen.style.setProperty("--sky-zenith", palette.zenith);
+    // Keep the browser chrome in step with the sky behind the status bar.
+    refreshThemeColor();
     this.screen.style.setProperty("--sky-midsky", palette.midsky);
     this.screen.style.setProperty("--sky-horizon", palette.horizon);
     this.screen.style.setProperty("--sky-sunglow", palette.sunglow);
