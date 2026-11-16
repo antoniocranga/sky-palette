@@ -14,7 +14,7 @@ type UpstreamHandler = (
   request: Request,
 ) => Response | null | Promise<Response | null>;
 
-const UPSTREAM_HOSTS = ["open-meteo.com", "challenges.cloudflare.com"];
+const UPSTREAM_HOSTS = ["open-meteo.com", "challenges.cloudflare.com", "openstreetmap.org"];
 const restorers: Array<() => void> = [];
 
 afterEach(() => {

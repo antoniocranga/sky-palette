@@ -11,6 +11,9 @@ import { logEvent } from "./http";
 
 const GEOCODING_ENDPOINT = "https://geocoding-api.open-meteo.com/v1/search";
 const RESULT_LIMIT = 8;
+const EARTH_RADIUS_KM = 6371;
+/** A reverse-geocoded name must land this close to the photo to be trusted. */
+const NAME_MATCH_KM = 40;
 
 interface GeocodingResult {
   name?: unknown;
@@ -282,4 +285,38 @@ export async function getCityBySlug(slug: string, env: { DB: D1Database }): Prom
     .bind(slug)
     .first<CityRow>();
   return row ? rowToCity(row) : null;
+}
+
+/**
+ * Resolve a place name returned by a reverse geocoder to the full City row
+ * (timezone, population, canonical coordinates) closest to the photo.
+ */
+export async function findCityNear(
+  name: string,
+  countryCode: string | null,
+  lat: number,
+  lon: number,
+  env: { DB: D1Database },
+): Promise<City | null> {
+  const results = await fetchGeocoder(name);
+  const wanted = countryCode?.toLowerCase() ?? null;
+  let best: { city: City; distance: number } | null = null;
+  for (const city of results) {
+    if (wanted && city.countryCode && city.countryCode.toLowerCase() !== wanted) continue;
+    const distance = distanceKm(lat, lon, city.lat, city.lon);
+    if (distance > NAME_MATCH_KM) continue;
+    if (!best || distance < best.distance) best = { city, distance };
+  }
+  if (!best) return null;
+  const [persisted] = await persistCities([best.city], env);
+  return persisted ?? null;
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
