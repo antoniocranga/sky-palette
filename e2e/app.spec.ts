@@ -1,9 +1,10 @@
 import sharp from "sharp";
-import { test, expect, gotoGallery, gotoHome, openFirstDay, makePng, makePngWithGps } from "./fixtures";
+import { test, expect, gotoGallery, gotoHome, openFirstDay, makePng, makePngWithGps, makePngWithTakenAt } from "./fixtures";
 import { contrastRatio, relativeLuminance } from "../src/shared/color";
 
 const GOOD_PNG = makePng(800, 600);
 const GPS_TOKYO_PNG = makePngWithGps(800, 600, 35.6762, 139.6503);
+const TAKEN_AT_PNG = makePngWithTakenAt(800, 600, "2026:11:10 18:42:07");
 
 function rgbToHex(value: string): string {
   const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(value);
@@ -1116,6 +1117,19 @@ test.describe("Sky Palette app", () => {
     await page.locator("#submit-btn").click();
     await expect(page.locator("#submit-success")).toBeVisible({ timeout: 10_000 });
     expect(api.lastSubmitBody).toContain("35.6762");
+  });
+
+  test("photo capture time fills the time and day pills", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await page.locator("#sky-file-input").setInputFiles({ name: "beach.png", mimeType: "image/png", buffer: TAKEN_AT_PNG });
+
+    await expect(page.locator("[data-time-hour]")).toHaveText("18", { timeout: 10_000 });
+    await expect(page.locator("[data-time-minute]")).toHaveText("42");
+    await expect(page.locator("#submit-time-day")).toContainText("Nov 10");
+
+    await page.locator("#submit-time-stepper").click();
+    await expect(page.locator('.time-wheel-column[data-wheel="day"] .time-wheel-item[aria-selected="true"]')).toContainText("Nov 10");
   });
 
   test("a deliberate location is not clobbered by photo GPS", async ({ page }) => {

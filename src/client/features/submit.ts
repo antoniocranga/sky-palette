@@ -12,7 +12,7 @@ import { TimeStepper } from "../lib/time-stepper";
 import { CitySearch } from "./search";
 import { formatBytes, formatCoordinate, formatDateLong, formatDateShort, parseDateTimeLocalValue, slugify, toDateTimeLocalValue } from "../lib/format";
 import { addDays, isoDayInZone } from "../../shared/time";
-import { readExifGps } from "../lib/exif";
+import { readExifCapture, type ExifTakenAt } from "../lib/exif";
 import { MAX_UPLOAD_BYTES, detectImageFormat, formatMegabytes, validateImage } from "../lib/image-validation";
 import { rgbToHex, type Rgb } from "../lib/color";
 import { setScreen, store, type AppCity } from "../state";
@@ -415,7 +415,12 @@ export class SubmitFeature {
         return;
       }
 
-      await this.autofillLocationFromPhoto(file, token);
+      // EXIF is read once: GPS moves the location, the capture instant moves
+      // the day and time pills.
+      const capture = await readExifCapture(file);
+      if (token !== this.fileToken) return;
+      if (capture.takenAt) this.applyPhotoTime(capture.takenAt);
+      await this.autofillLocationFromPhoto(capture.gps, token);
       if (token !== this.fileToken) return;
       setText(this.fileMeta, "Optimising…");
       const prepared = await preparePhoto(file, decoded.source, decoded.width, decoded.height);
@@ -595,8 +600,20 @@ export class SubmitFeature {
     this.updateProgress("Done");
   }
 
-  private async autofillLocationFromPhoto(file: File, token: number): Promise<void> {
-    const gps = await readExifGps(file);
+  private applyPhotoTime(taken: ExifTakenAt): void {
+    this.captureDate = taken.date;
+    // Widen the wheel when the photo predates the seven-day window.
+    this.syncWheelDays();
+    this.stepper.setValue(taken.hours, taken.minutes);
+    this.stepper.setDay(taken.date);
+    this.paintWheelDay();
+    this.syncCapturedValue();
+  }
+
+  private async autofillLocationFromPhoto(
+    gps: { lat: number; lon: number } | null,
+    token: number,
+  ): Promise<void> {
     if (!gps || token !== this.fileToken) return;
 
     this.photoLookup?.abort();
@@ -667,6 +684,10 @@ export class SubmitFeature {
       value: date,
       label: formatDateShort(date),
     }));
+    // A photo taken before that window keeps its own day in the wheel.
+    if (this.captureDate && !days.some((day) => day.value === this.captureDate)) {
+      days.unshift({ value: this.captureDate, label: formatDateShort(this.captureDate) });
+    }
     this.stepper.setDays(days, this.captureDate);
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseExifGps } from "../../../src/client/lib/exif";
+import { parseExifCapture, parseExifGps } from "../../../src/client/lib/exif";
 
 const BUCHAREST = { lat: 44.4268, lon: 26.1025 };
 
@@ -139,5 +139,49 @@ describe("EXIF GPS parser", () => {
   it("never throws on random bytes", () => {
     expect(() => parseExifGps(new Uint8Array([1, 2, 3, 4, 5]))).not.toThrow();
     expect(parseExifGps(new Uint8Array([1, 2, 3, 4, 5]))).toBeNull();
+  });
+});
+
+function buildDateTiff(text: string): Uint8Array {
+  const ascii = new TextEncoder().encode(text.slice(0, 19) + "\0");
+  const bytes = new Uint8Array(44 + ascii.length);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0x49;
+  bytes[1] = 0x49;
+  view.setUint16(2, 42, true);
+  view.setUint32(4, 8, true);
+  // IFD0: one entry, Exif IFD pointer at 26.
+  view.setUint16(8, 1, true);
+  view.setUint16(10, 0x8769, true);
+  view.setUint16(12, 4, true);
+  view.setUint32(14, 1, true);
+  view.setUint32(18, 26, true);
+  view.setUint32(22, 0, true);
+  // Exif IFD: one entry, DateTimeOriginal pointing at 44.
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 0x9003, true);
+  view.setUint16(30, 2, true);
+  view.setUint32(32, ascii.length, true);
+  view.setUint32(36, 44, true);
+  view.setUint32(40, 0, true);
+  bytes.set(ascii, 44);
+  return bytes;
+}
+
+describe("EXIF capture time parser", () => {
+  it("reads DateTimeOriginal from a JPEG", () => {
+    const capture = parseExifCapture(jpegWith(buildDateTiff("2026:11:10 18:42:00")));
+    expect(capture.takenAt).toEqual({ date: "2026-11-10", hours: 18, minutes: 42 });
+    expect(capture.gps).toBeNull();
+  });
+
+  it("reads the same instant from PNG and WebP", () => {
+    const tiff = buildDateTiff("2026:11:10 18:42:00");
+    expect(parseExifCapture(pngWith(tiff)).takenAt?.date).toBe("2026-11-10");
+    expect(parseExifCapture(webpWith(tiff)).takenAt?.hours).toBe(18);
+  });
+
+  it("ignores impossible dates", () => {
+    expect(parseExifCapture(jpegWith(buildDateTiff("1888:01:01 00:00:00"))).takenAt).toBeNull();
   });
 });

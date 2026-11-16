@@ -1,12 +1,27 @@
 /**
- * Tiny, defensive EXIF GPS reader. No dependency and no throwing: malformed,
- * truncated or absurd metadata simply yields null.
+ * Tiny, defensive EXIF reader for GPS and the capture instant. No dependency
+ * and no throwing: malformed, truncated or absurd metadata simply yields null.
  */
 
 export interface GpsCoordinates {
   lat: number;
   lon: number;
 }
+
+/** Wall-clock capture time as recorded by the camera. */
+export interface ExifTakenAt {
+  /** `YYYY-MM-DD` in the camera's local zone. */
+  date: string;
+  hours: number;
+  minutes: number;
+}
+
+export interface ExifCapture {
+  gps: GpsCoordinates | null;
+  takenAt: ExifTakenAt | null;
+}
+
+const EMPTY: ExifCapture = { gps: null, takenAt: null };
 
 const JPEG_SIGNATURE = [0xff, 0xd8] as const;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
@@ -19,32 +34,41 @@ function startsWith(bytes: Uint8Array, signature: readonly number[], offset = 0)
   return true;
 }
 
-/** Parse GPS from a JPEG, PNG or WebP byte buffer. Never throws. */
-export function parseExifGps(bytes: Uint8Array): GpsCoordinates | null {
+/** Parse GPS and the capture time from a JPEG, PNG or WebP buffer. Never throws. */
+export function parseExifCapture(bytes: Uint8Array): ExifCapture {
   try {
-    if (startsWith(bytes, JPEG_SIGNATURE)) return jpegGps(bytes);
-    if (startsWith(bytes, PNG_SIGNATURE)) return pngGps(bytes);
-    if (startsWith(bytes, RIFF) && startsWith(bytes, WEBP, 8)) return webpGps(bytes);
+    if (startsWith(bytes, JPEG_SIGNATURE)) return parseTiff(jpegTiff(bytes));
+    if (startsWith(bytes, PNG_SIGNATURE)) return parseTiff(pngTiff(bytes));
+    if (startsWith(bytes, RIFF) && startsWith(bytes, WEBP, 8)) return parseTiff(webpTiff(bytes));
   } catch {
-    return null;
+    return EMPTY;
   }
-  return null;
+  return EMPTY;
+}
+
+export function parseExifGps(bytes: Uint8Array): GpsCoordinates | null {
+  return parseExifCapture(bytes).gps;
+}
+
+export async function readExifCapture(file: File): Promise<ExifCapture> {
+  try {
+    const buffer = await file.arrayBuffer();
+    return parseExifCapture(new Uint8Array(buffer));
+  } catch {
+    return EMPTY;
+  }
 }
 
 export async function readExifGps(file: File): Promise<GpsCoordinates | null> {
-  try {
-    const buffer = await file.arrayBuffer();
-    return parseExifGps(new Uint8Array(buffer));
-  } catch {
-    return null;
-  }
+  return (await readExifCapture(file)).gps;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Containers                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function jpegGps(bytes: Uint8Array): GpsCoordinates | null {
+/** Returns the TIFF block carried by the JPEG's APP1 Exif segment, if any. */
+function jpegTiff(bytes: Uint8Array): Uint8Array | null {
   let offset = 2;
   while (offset + 4 <= bytes.length) {
     if (bytes[offset] !== 0xff) {
@@ -64,7 +88,7 @@ function jpegGps(bytes: Uint8Array): GpsCoordinates | null {
       if (marker === 0xe1) {
         const start = offset + 2;
         if (startsWith(bytes, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00], start)) {
-          return parseTiff(bytes.subarray(start + 6, offset + length));
+          return bytes.subarray(start + 6, offset + length);
         }
       }
       offset += length;
@@ -73,7 +97,7 @@ function jpegGps(bytes: Uint8Array): GpsCoordinates | null {
   return null;
 }
 
-function pngGps(bytes: Uint8Array): GpsCoordinates | null {
+function pngTiff(bytes: Uint8Array): Uint8Array | null {
   let offset = 8;
   while (offset + 12 <= bytes.length) {
     const length = u32be(bytes, offset);
@@ -85,14 +109,14 @@ function pngGps(bytes: Uint8Array): GpsCoordinates | null {
       bytes[typeOffset + 2] ?? 0,
       bytes[typeOffset + 3] ?? 0,
     );
-    if (type === "eXIf") return parseTiff(bytes.subarray(offset + 8, offset + 8 + length));
+    if (type === "eXIf") return bytes.subarray(offset + 8, offset + 8 + length);
     if (type === "IEND") return null;
     offset += 12 + length;
   }
   return null;
 }
 
-function webpGps(bytes: Uint8Array): GpsCoordinates | null {
+function webpTiff(bytes: Uint8Array): Uint8Array | null {
   let offset = 12;
   while (offset + 8 <= bytes.length) {
     const type = String.fromCharCode(
@@ -106,7 +130,7 @@ function webpGps(bytes: Uint8Array): GpsCoordinates | null {
     if (length > bytes.length - start) return null;
     if (type === "EXIF") {
       const exif = bytes.subarray(start, start + length);
-      return parseTiff(startsWith(exif, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]) ? exif.subarray(6) : exif);
+      return startsWith(exif, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]) ? exif.subarray(6) : exif;
     }
     offset = start + length + (length % 2);
   }
@@ -114,19 +138,25 @@ function webpGps(bytes: Uint8Array): GpsCoordinates | null {
 }
 
 /* -------------------------------------------------------------------------- */
-/* TIFF / GPS                                                                 */
+/* TIFF                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function parseTiff(tiff: Uint8Array): GpsCoordinates | null {
-  if (tiff.length < 8) return null;
+function parseTiff(tiff: Uint8Array | null): ExifCapture {
+  if (!tiff || tiff.length < 8) return EMPTY;
   const little = tiff[0] === 0x49 && tiff[1] === 0x49;
-  if (!little && !(tiff[0] === 0x4d && tiff[1] === 0x4d)) return null;
+  if (!little && !(tiff[0] === 0x4d && tiff[1] === 0x4d)) return EMPTY;
   const magic = readU16(tiff, 2, little);
-  if (magic !== 42) return null;
+  if (magic !== 42) return EMPTY;
   const ifd0 = readU32(tiff, 4, little);
-  const gpsIfd = findGpsIfd(tiff, ifd0, little);
-  if (gpsIfd === null) return null;
+  const gpsIfd = findIfd(tiff, ifd0, 0x8825, little);
+  const exifIfd = findIfd(tiff, ifd0, 0x8769, little);
+  return {
+    gps: gpsIfd === null ? null : readGps(tiff, gpsIfd, little),
+    takenAt: readTakenAt(tiff, ifd0, exifIfd, little),
+  };
+}
 
+function readGps(tiff: Uint8Array, gpsIfd: number, little: boolean): GpsCoordinates | null {
   const count = readU16(tiff, gpsIfd, little);
   if (count <= 0 || count > 512) return null;
   let lat: number | null = null;
@@ -152,21 +182,74 @@ function parseTiff(tiff: Uint8Array): GpsCoordinates | null {
   }
 
   if (lat === null || lon === null) return null;
-  if (latRef === "S") lat = -lat;
-  if (lonRef === "W") lon = -lon;
+  if ((latRef ?? "").toUpperCase() === "S") lat = -lat;
+  if ((lonRef ?? "").toUpperCase() === "W") lon = -lon;
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   return { lat: round(lat, 6), lon: round(lon, 6) };
 }
 
-function findGpsIfd(tiff: Uint8Array, ifdOffset: number, little: boolean): number | null {
+/** DateTimeOriginal, then DateTimeDigitized, then the IFD0 DateTime. */
+function readTakenAt(
+  tiff: Uint8Array,
+  ifd0: number,
+  exifIfd: number | null,
+  little: boolean,
+): ExifTakenAt | null {
+  const candidates: Array<[number, number]> = [];
+  if (exifIfd !== null) candidates.push([exifIfd, 0x9003], [exifIfd, 0x9004]);
+  candidates.push([ifd0, 0x0132]);
+  for (const [ifd, tag] of candidates) {
+    const text = readTagAscii(tiff, ifd, tag, little);
+    const parsed = text ? parseDateTime(text) : null;
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function readTagAscii(tiff: Uint8Array, ifdOffset: number, wanted: number, little: boolean): string | null {
+  const count = readU16(tiff, ifdOffset, little);
+  if (count <= 0 || count > 1024) return null;
+  for (let index = 0; index < count; index += 1) {
+    const entry = ifdOffset + 2 + index * 12;
+    if (entry + 12 > tiff.length) return null;
+    if (readU16(tiff, entry, little) !== wanted) continue;
+    const type = readU16(tiff, entry + 2, little);
+    const valueCount = readU32(tiff, entry + 4, little);
+    return readAscii(tiff, entry + 8, type, valueCount, little);
+  }
+  return null;
+}
+
+/** `YYYY:MM:DD HH:MM:SS`, the only format cameras actually write. */
+function parseDateTime(text: string): ExifTakenAt | null {
+  const match = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(text.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hours = Number(match[4]);
+  const minutes = Number(match[5]);
+  const seconds = Number(match[6]);
+  // The server accepts 1990..2100; a camera clock outside that is meaningless.
+  if (year < 1990 || year > 2100) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hours > 23 || minutes > 59 || seconds > 59) return null;
+  return {
+    date: `${match[1]}-${match[2]}-${match[3]}`,
+    hours,
+    minutes,
+  };
+}
+
+function findIfd(tiff: Uint8Array, ifdOffset: number, wanted: number, little: boolean): number | null {
   if (ifdOffset + 2 > tiff.length) return null;
   const count = readU16(tiff, ifdOffset, little);
   if (count > 1024) return null;
   for (let index = 0; index < count; index += 1) {
     const entry = ifdOffset + 2 + index * 12;
     if (entry + 12 > tiff.length) return null;
-    if (readU16(tiff, entry, little) === 0x8825) {
+    if (readU16(tiff, entry, little) === wanted) {
       const type = readU16(tiff, entry + 2, little);
       const valueCount = readU32(tiff, entry + 4, little);
       if (type !== 4 || valueCount !== 1) return null;
@@ -213,7 +296,7 @@ function readAscii(
     if (code === 0) break;
     text += String.fromCharCode(code);
   }
-  return text.toUpperCase();
+  return text;
 }
 
 function u16be(bytes: Uint8Array, offset: number): number {
