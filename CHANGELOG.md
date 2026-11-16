@@ -12,7 +12,8 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 - **Footer**: one sentence with inline Privacy Policy, Terms and a Protected explanation instead of a separate row.
 - **Submit drum**: the hour, minute and day wheels are transform-driven with 1:1 dragging, correct momentum, 40 px snapping and a rubber-band at both ends; the pill keeps the location typography and the tag pencil sits on the same inset as the search icon.
 - **Resilience**: skeleton rows during the first gallery load and every append; the offline toast carries a retry button and survives unrelated successful requests.
-- **iPhone**: sky backdrop and scrims cover the full visual viewport across the safe areas.
+- **iPhone**: the page tint follows the screen (sky zenith on Home, dark on the gallery and dialogs, white on day detail) so the status bar and overscroll areas no longer read as stray white or blue bands.
+- **Submit dialog**: the upload action is a real footer pinned to the card edge, so scrolled swatches can never appear beneath it.
 
 ### Fixed
 

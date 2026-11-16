@@ -7,6 +7,7 @@ import "./modal-scrim.css";
 
 import { getCityBySlug, getConfig, searchCities, type AppConfig } from "./api";
 import { applyToastTone, bindGlobalActions, qs, registerAction } from "./lib/dom";
+import { refreshThemeColor } from "./lib/theme";
 import { ModalController } from "./lib/dom";
 import { HomeFeature } from "./features/home";
 import { GalleryFeature } from "./features/gallery";
@@ -137,9 +138,13 @@ export async function bootstrap(): Promise<void> {
 
   store.subscribeKey("screen", () => applyScreen());
   applyScreen();
+  refreshThemeColor();
   // The toast pill inverts with the surface behind it; watch screen, modal and
   // home-tone class/attribute changes instead of duplicating that state here.
-  new MutationObserver(() => applyToastTone()).observe(document.body, {
+  new MutationObserver(() => {
+    applyToastTone();
+    refreshThemeColor();
+  }).observe(document.body, {
     attributes: true,
     attributeFilter: ["class", "data-tone"],
     subtree: true,
