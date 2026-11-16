@@ -1575,22 +1575,15 @@ input[type="datetime-local"] {
   background: #f5f5f5;
 }
 
+/* Pinned to the card's bottom edge, outside the scroll body, so scrolled
+   swatches can never peek below it. The shell already pads for the home
+   indicator, so the footer adds no extra safe-area inset. */
 #submit-sticky-footer {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   z-index: 25;
-  margin-top: 1.5rem;
-  padding-top: 0.75rem;
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  padding: 0.75rem 1.5rem;
   background: #ffffff;
-}
-
-@media (min-width: 640px) {
-  #submit-sticky-footer {
-    position: static;
-    padding-bottom: 0;
-    background: transparent;
-  }
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 button,

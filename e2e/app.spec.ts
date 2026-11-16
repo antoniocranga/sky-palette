@@ -1016,7 +1016,7 @@ test.describe("Sky Palette app", () => {
     await page.locator("#nav-btn-submit").click();
     await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
     await expect(page.locator("#consent-checkbox")).toHaveCount(0);
-    const footer = page.locator("#submit-form-body");
+    const footer = page.locator("#submit-sticky-footer");
     await expect(footer).toContainText("Photos are reviewed before publication");
     await expect(footer).toContainText("By submitting, you agree to publish this photo under CC0 and confirm you own it.");
     await expect(footer).not.toContainText("No account needed");
@@ -1352,6 +1352,60 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#submit-footer")).toContainText("Photos are reviewed before publication");
     await expect(page.locator("#submit-footer")).not.toContainText("No account needed");
     await expect(page.locator("#submit-footer")).toContainText("Protected");
+  });
+
+  test("submit footer is pinned to the card bottom, never floating over content", async ({ page }) => {
+    await gotoHome(page);
+    await page.locator("#nav-btn-submit").click();
+    await expect(page.locator("#submit-modal")).toHaveClass(/is-open/);
+
+    const geometry = await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>("#submit-form-body")!;
+      body.scrollTop = body.scrollHeight;
+      const card = document.querySelector<HTMLElement>("#submit-modal .modal-card")!.getBoundingClientRect();
+      const footer = document.querySelector<HTMLElement>("#submit-sticky-footer")!.getBoundingClientRect();
+      const hit = document.elementFromPoint(card.left + card.width / 2, card.bottom - 4);
+      return {
+        cardBottom: card.bottom,
+        footerBottom: footer.bottom,
+        footerTop: footer.top,
+        bodyBottom: body.getBoundingClientRect().bottom,
+        scrollable: body.scrollHeight - body.clientHeight > 0,
+        scrolled: body.scrollTop > 0,
+        insideFooter: !!hit?.closest("#submit-sticky-footer"),
+      };
+    });
+
+    if (geometry.scrollable) expect(geometry.scrolled).toBe(true);
+    expect(Math.abs(geometry.cardBottom - geometry.footerBottom)).toBeLessThanOrEqual(1);
+    expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.bodyBottom - 1);
+    expect(geometry.insideFooter).toBe(true);
+  });
+
+  test("page tint follows the screen and any open dialog", async ({ page }) => {
+    const tint = () => page.evaluate(() => ({
+      meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
+      html: getComputedStyle(document.documentElement).backgroundColor,
+    }));
+
+    await gotoHome(page);
+    const home = await tint();
+    expect(home.meta).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(home.html).toBe(`rgb(${parseInt(home.meta!.slice(1, 3), 16)}, ${parseInt(home.meta!.slice(3, 5), 16)}, ${parseInt(home.meta!.slice(5, 7), 16)})`);
+
+    await gotoGallery(page);
+    await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
+    expect((await tint()).html).toBe("rgb(11, 13, 18)");
+
+    await openFirstDay(page);
+    await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
+    expect((await tint()).html).toBe("rgb(255, 255, 255)");
+
+    await page.locator("#nav-btn-submit").click();
+    await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#submit-modal")).not.toHaveClass(/is-open/);
+    await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
   });
 
   test("submit rejects HEIC with a clear message and ignores photos without GPS", async ({ page }) => {
