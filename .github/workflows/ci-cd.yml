@@ -21,7 +21,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The Playwright matrix alone runs ~14 min on a cold runner; the old 20 min
+    # cap started cancelling the job mid-desktop.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
