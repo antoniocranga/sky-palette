@@ -13,7 +13,7 @@ import {
   formatDateUpper,
   formatElevation,
 } from "../lib/format";
-import { CARD_SIZE, STORY_SIZE, sharePngFilename } from "../lib/share-card";
+import { CARD_SIZE, STORY_LAYOUT, STORY_SIZE, sharePngFilename, storyContent } from "../lib/share-card";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, isoDayInZone } from "../../shared/time";
@@ -104,7 +104,7 @@ export class ShareFeature {
     });
     registerAction("share-social", (element) => {
       const platform = element.dataset.platform;
-      if (platform && isSocial(platform)) void this.shareSocial(platform, element);
+      if (platform && isSocial(platform)) this.shareSocial(platform);
     });
 
     store.subscribeKey("share", () => {
@@ -331,37 +331,15 @@ export class ShareFeature {
   }
 
   /**
-   * X/Facebook/WhatsApp/Telegram: the sheet carries the card image. Without
-   * file sharing, save the card first and then open the platform composer so
-   * the post is never sent as a bare link.
+   * Link-first social sharing: the composer opens synchronously inside the
+   * tap so the popup is never blocked, and no native sheet is involved.
    */
-  private async shareSocial(platform: SocialPlatform, trigger?: HTMLElement | null): Promise<void> {
-    if (this.sharing) return;
+  private shareSocial(platform: SocialPlatform): void {
     const snapshot = this.snapshot ?? store.state.share ?? fallbackSnapshot();
-    const blob = this.cardBlob;
-    if (!blob || this.preparedStyle !== this.style) {
-      showToast("Card is still rendering…");
-      return;
-    }
-    const filename = sharePngFilename("card", snapshot.city.slug, snapshot.dateIso);
-    const title = `Sky above ${snapshot.city.name}`;
-    const text = `Sky above ${snapshot.city.name} · ${snapshot.phase} · ${snapshot.timeLabel}`;
+    const text = `${snapshot.timeLabel} · ${snapshot.phase} · ${snapshot.city.name}`;
     const url = shareUrlFor(snapshot.city, snapshot.dateIso);
-
-    this.beginShare(trigger);
-    try {
-      const outcome = await nativeShare(blob, filename, title, `${text}\n${url}`);
-      if (outcome === "shared" || outcome === "cancelled") {
-        setText(this.status, outcome === "shared" ? "Card shared" : "");
-        return;
-      }
-      downloadBlob(blob, filename);
-      window.open(socialIntent(platform, url, text), "_blank", "noopener,noreferrer");
-      setText(this.status, "Card downloaded");
-      showToast(SOCIAL_FALLBACK_TOAST);
-    } finally {
-      this.endShare();
-    }
+    setText(this.status, "Opening composer…");
+    window.open(socialIntent(platform, url, text), "_blank", "noopener,noreferrer");
   }
 }
 
@@ -479,23 +457,208 @@ function drawCardStyle(context: CanvasRenderingContext2D, style: CardStyle, snap
   }
 }
 
-/** 1080 × 1920 Story: palette field with the selected 4:5 card centred. */
+/** 1080 × 1920 Story: one full-bleed palette frame, not a card on a backdrop. */
 export async function renderStory(style: CardStyle, snapshot: ShareSnapshot, canvas: HTMLCanvasElement | null, handle = ""): Promise<Blob> {
   const surface = canvas ?? document.createElement("canvas");
   surface.width = STORY_SIZE.width;
   surface.height = STORY_SIZE.height;
   const context = surface.getContext("2d");
   if (!context) throw new Error("Canvas 2D unavailable");
+  drawStoryFrame(context, style, snapshot, handle);
+  return canvasToPng(surface);
+}
+
+interface StoryTreatment {
+  eyebrowFont: string;
+  cityFont: string;
+  coordsFont: string;
+  cityText: string;
+  ink: string;
+  muted: string;
+  panelFill: string;
+  panelStroke: string;
+  pillFill: string;
+  pillInk: string;
+  rule: string;
+  hex: string;
+  swatchRadius: number;
+}
+
+function storyTreatment(style: CardStyle, city: string): StoryTreatment {
+  switch (style) {
+    case "studio":
+      return {
+        eyebrowFont: `500 20px ${MONO}`,
+        cityFont: `700 112px ${SANS}`,
+        coordsFont: `400 22px ${MONO}`,
+        cityText: city.toUpperCase(),
+        ink: "#FFFFFF",
+        muted: "rgba(255,255,255,0.72)",
+        panelFill: "rgba(9,9,11,0.30)",
+        panelStroke: "rgba(255,255,255,0.18)",
+        pillFill: "#09090B",
+        pillInk: "#FFFFFF",
+        rule: "rgba(255,255,255,0.18)",
+        hex: "rgba(255,255,255,0.72)",
+        swatchRadius: 28,
+      };
+    case "telemetry":
+      return {
+        eyebrowFont: `700 20px ${MONO}`,
+        cityFont: `700 96px ${MONO}`,
+        coordsFont: `400 20px ${MONO}`,
+        cityText: city.toUpperCase(),
+        ink: "#FFFFFF",
+        muted: "rgba(255,255,255,0.55)",
+        panelFill: "rgba(0,0,0,0.45)",
+        panelStroke: "rgba(255,255,255,0.14)",
+        pillFill: "#0B0D12",
+        pillInk: "#FCD34D",
+        rule: "rgba(255,255,255,0.14)",
+        hex: "rgba(255,255,255,0.62)",
+        swatchRadius: 16,
+      };
+    case "horizon":
+      return {
+        eyebrowFont: `500 20px ${MONO}`,
+        cityFont: `italic 600 104px ${SERIF}`,
+        coordsFont: `400 22px ${MONO}`,
+        cityText: `Sky above ${city}`,
+        ink: "#FEF3C7",
+        muted: "rgba(254,243,199,0.65)",
+        panelFill: "rgba(14,17,26,0.34)",
+        panelStroke: "rgba(254,243,199,0.18)",
+        pillFill: "#FEF3C7",
+        pillInk: "#0E111A",
+        rule: "rgba(254,243,199,0.18)",
+        hex: "rgba(254,243,199,0.70)",
+        swatchRadius: 32,
+      };
+    case "monolith":
+      return {
+        eyebrowFont: `700 20px ${SANS}`,
+        cityFont: `700 104px ${SANS}`,
+        coordsFont: `400 20px ${MONO}`,
+        cityText: city.toUpperCase(),
+        ink: "#FFFFFF",
+        muted: "rgba(255,255,255,0.58)",
+        panelFill: "rgba(0,0,0,0.48)",
+        panelStroke: "rgba(255,255,255,0.16)",
+        pillFill: "#FFFFFF",
+        pillInk: "#000000",
+        rule: "rgba(255,255,255,0.16)",
+        hex: "rgba(255,255,255,0.60)",
+        swatchRadius: 0,
+      };
+  }
+}
+
+function drawStoryFrame(context: CanvasRenderingContext2D, style: CardStyle, snapshot: ShareSnapshot, handle: string): void {
+  const layout = STORY_LAYOUT;
+  const content = storyContent(snapshot);
+  const treatment = storyTreatment(style, snapshot.city.name);
+  const left = layout.margin;
+  const right = layout.width - layout.margin;
+  const width = right - left;
   drawStoryBackdrop(context, snapshot);
 
-  const card = document.createElement("canvas");
-  card.width = CARD_SIZE.width;
-  card.height = CARD_SIZE.height;
-  const cardContext = card.getContext("2d");
-  if (!cardContext) throw new Error("Canvas 2D unavailable");
-  drawCardStyle(cardContext, style, snapshot, swatches(snapshot.palette), handle);
-  context.drawImage(card, 0, (STORY_SIZE.height - CARD_SIZE.height) / 2);
-  return canvasToPng(surface);
+  context.textAlign = "left";
+  context.fillStyle = treatment.muted;
+  context.font = treatment.eyebrowFont;
+  context.fillText(content.eyebrow, left, layout.contentTop + 22);
+
+  // Date pill at the top safe margin.
+  context.font = `500 22px ${MONO}`;
+  const pillWidth = context.measureText(content.date).width + 56;
+  const pillHeight = 56;
+  const pillX = right - pillWidth;
+  const pillY = layout.contentTop;
+  context.fillStyle = treatment.pillFill;
+  context.beginPath();
+  context.roundRect(pillX, pillY, pillWidth, pillHeight, 28);
+  context.fill();
+  context.fillStyle = treatment.pillInk;
+  context.textAlign = "center";
+  context.fillText(content.date, pillX + pillWidth / 2, pillY + 36);
+  context.textAlign = "left";
+
+  context.save();
+  context.shadowColor = "rgba(0,0,0,0.28)";
+  context.shadowBlur = 18;
+  context.fillStyle = treatment.ink;
+  context.font = treatment.cityFont;
+  context.fillText(treatment.cityText, left, layout.contentTop + 142, width);
+  context.restore();
+
+  context.fillStyle = treatment.muted;
+  context.font = treatment.coordsFont;
+  context.fillText(content.coords, left, layout.contentTop + 188, width);
+
+  drawSwatchRow(context, content.colors, left, layout.swatchTop, width, layout.swatchHeight, treatment.swatchRadius);
+  drawHexRow(context, content.hexes, left, layout.hexBaseline, width, treatment.hex, 18);
+
+  const panelX = left;
+  const panelY = layout.panelTop;
+  const panelW = width;
+  const panelH = layout.panelHeight;
+  const pad = 36;
+  context.fillStyle = treatment.panelFill;
+  context.beginPath();
+  context.roundRect(panelX, panelY, panelW, panelH, 24);
+  context.fill();
+  context.strokeStyle = treatment.panelStroke;
+  context.lineWidth = 2;
+  context.stroke();
+
+  const handleTag = handle ? `@${handle}` : content.handle;
+  context.fillStyle = treatment.ink;
+  context.font = `600 26px ${MONO}`;
+  context.fillText(`${content.time} · ${content.phase} · ${handleTag}`, panelX + pad, panelY + 58, panelW - pad * 2);
+
+  context.strokeStyle = treatment.rule;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(panelX + pad, panelY + 88);
+  context.lineTo(panelX + panelW - pad, panelY + 88);
+  context.stroke();
+
+  const columns = [panelX + pad, panelX + panelW / 2 + 12];
+  const rows = [
+    [content.metrics[0], content.metrics[1]],
+    [content.metrics[2], content.metrics[3]],
+  ];
+  rows.forEach((row, rowIndex) => {
+    row.forEach((metric, columnIndex) => {
+      if (!metric) return;
+      const x = columns[columnIndex] ?? columns[0]!;
+      const labelY = panelY + 134 + rowIndex * 82;
+      context.fillStyle = treatment.muted;
+      context.font = `500 16px ${MONO}`;
+      context.fillText(metric.label, x, labelY);
+      context.fillStyle = treatment.ink;
+      context.font = `600 28px ${MONO}`;
+      context.fillText(metric.value, x, labelY + 36, panelW / 2 - pad - 12);
+    });
+  });
+
+  context.fillStyle = treatment.muted;
+  context.font = `500 22px ${MONO}`;
+  context.textAlign = "right";
+  context.fillText(content.site, panelX + panelW - pad, panelY + panelH - 24);
+  context.textAlign = "left";
+
+  context.strokeStyle = treatment.rule;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(left, layout.footerRule);
+  context.lineTo(right, layout.footerRule);
+  context.stroke();
+  context.fillStyle = treatment.muted;
+  context.font = `500 18px ${MONO}`;
+  context.fillText("ONE SKY · FIVE COLOURS", left, layout.footerBaseline);
+  context.textAlign = "right";
+  context.fillText("SKY PALETTE", right, layout.footerBaseline);
+  context.textAlign = "left";
 }
 
 function swatches(palette: Palette): string[] {
@@ -548,15 +711,11 @@ function drawStoryBackdrop(context: CanvasRenderingContext2D, snapshot: ShareSna
   const palette = snapshot.palette;
   const bg = context.createLinearGradient(0, 0, 0, height);
   bg.addColorStop(0, palette.zenith);
-  bg.addColorStop(0.4, palette.midsky);
-  bg.addColorStop(0.72, palette.horizon);
+  bg.addColorStop(0.42, palette.midsky);
+  bg.addColorStop(0.74, palette.horizon);
+  bg.addColorStop(0.995, palette.sunglow);
   bg.addColorStop(1, palette.sunglow);
   context.fillStyle = bg;
-  context.fillRect(0, 0, width, height);
-  const glow = context.createRadialGradient(width / 2, height * 0.7, 40, width / 2, height * 0.7, width * 0.75);
-  glow.addColorStop(0, `${palette.sunglow}99`);
-  glow.addColorStop(0.7, "rgba(0,0,0,0)");
-  context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
 }
 

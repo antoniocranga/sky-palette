@@ -112,6 +112,8 @@ type ShareProbe = {
   title: string;
   text: string;
   openedUrl: string;
+  openedUrls: string[];
+  openDuringClick: boolean[];
 };
 
 async function stubShareApi(
@@ -126,6 +128,8 @@ async function stubShareApi(
         title: "",
         text: "",
         openedUrl: "",
+        openedUrls: [] as string[],
+        openDuringClick: [] as boolean[],
       };
       (window as Window & { __shareProbe?: typeof probe; __shareFiles?: File[] }).__shareProbe = probe;
       (window as Window & { __shareFiles?: File[] }).__shareFiles = [];
@@ -156,10 +160,25 @@ async function stubShareApi(
           if (abort) throw new DOMException("Share cancelled", "AbortError");
         },
       });
+      const clickState = window as Window & { __shareInClick?: boolean };
+      clickState.__shareInClick = false;
+      document.addEventListener(
+        "click",
+        () => {
+          clickState.__shareInClick = true;
+          setTimeout(() => {
+            clickState.__shareInClick = false;
+          }, 0);
+        },
+        true,
+      );
       Object.defineProperty(window, "open", {
         configurable: true,
         value: (url?: string | URL | null) => {
-          probe.openedUrl = String(url ?? "");
+          const value = String(url ?? "");
+          probe.openedUrl = value;
+          probe.openedUrls.push(value);
+          probe.openDuringClick.push(Boolean(clickState.__shareInClick));
           return null;
         },
       });
@@ -171,7 +190,7 @@ async function stubShareApi(
 async function readShareProbe(page: import("@playwright/test").Page): Promise<ShareProbe> {
   return page.evaluate(() => {
     const probe = (window as Window & { __shareProbe?: ShareProbe }).__shareProbe;
-    return probe ?? { calls: 0, files: [], title: "", text: "", openedUrl: "" };
+    return probe ?? { calls: 0, files: [], title: "", text: "", openedUrl: "", openedUrls: [], openDuringClick: [] };
   });
 }
 
@@ -1898,37 +1917,154 @@ test.describe("Sky Palette app", () => {
     );
   });
 
-  test("social fallback downloads the card before opening the composer", async ({ page }) => {
-    await stubShareApi(page, { canShare: false });
+  test("social buttons open their own composer without a download or native sheet", async ({ page }) => {
+    await stubShareApi(page, { canShare: true });
     await gotoHome(page);
     await page.locator("#dock-share-btn").click();
     await expect(page.locator("#share-modal")).toHaveAttribute("data-card-style", "studio", { timeout: 10_000 });
     const x = page.locator("#share-x");
     await expect(x).toBeEnabled({ timeout: 10_000 });
-    const downloadPromise = page.waitForEvent("download");
     await x.click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/\.png$/);
-    await expect(page.locator("#toast-msg")).toHaveText("Card downloaded — attach it to your post.");
+    await expect.poll(async () => (await readShareProbe(page)).openedUrls.length).toBe(1);
     const probe = await readShareProbe(page);
     expect(probe.calls).toBe(0);
-    expect(probe.openedUrl).toContain("twitter.com/intent/tweet");
-    expect(decodeURIComponent(probe.openedUrl)).toContain("view=home");
+    expect(probe.openedUrls[0]).toContain("twitter.com/intent/tweet");
+    expect(decodeURIComponent(probe.openedUrls[0] ?? "")).toContain("view=home");
+    expect(probe.openDuringClick).toEqual([true]);
+    await expect(x).toBeEnabled();
   });
 
-  test("only the in-flight share control disables", async ({ page }) => {
+  test("X, WhatsApp and Facebook open their composers synchronously with exact URLs", async ({ page }) => {
+    await stubShareApi(page, { canShare: true });
+    await gotoHome(page);
+    await page.locator("#dock-share-btn").click();
+    await expect(page.locator("#share-modal")).toHaveAttribute("data-card-style", "studio", { timeout: 10_000 });
+
+    await page.evaluate(() => {
+      (window as Window & { __copied?: string }).__copied = "";
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (text: string) => { (window as Window & { __copied?: string }).__copied = text; } },
+      });
+    });
+    await page.locator('#share-modal [data-action="copy-link"]').click();
+    await expect.poll(async () => page.evaluate(() => (window as Window & { __copied?: string }).__copied ?? "")).not.toBe("");
+    const deepLink = await page.evaluate(() => (window as Window & { __copied?: string }).__copied ?? "");
+    const meta = (await page.locator("#studio-time").textContent()) ?? "";
+    const [time = "", phase = ""] = meta.split(" · ");
+    const city = (await page.locator("#home-city-label").textContent()) ?? "";
+    const text = `${time} · ${phase} · ${city}`;
+    const encodedText = encodeURIComponent(text);
+    const encodedUrl = encodeURIComponent(deepLink);
+    const expected = [
+      `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+      `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
+      `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    ];
+
+    for (const id of ["share-x", "share-whatsapp", "share-facebook"]) {
+      await expect(page.locator(`#${id}`)).toBeEnabled();
+      await page.locator(`#${id}`).click();
+    }
+    await expect.poll(async () => (await readShareProbe(page)).openedUrls.length).toBe(3);
+    const probe = await readShareProbe(page);
+    expect(probe.calls).toBe(0);
+    expect(probe.openedUrls).toEqual(expected);
+    expect(probe.openDuringClick).toEqual([true, true, true]);
+    for (const id of ["share-x", "share-whatsapp", "share-facebook"]) {
+      await expect(page.locator(`#${id}`)).toBeEnabled();
+    }
+  });
+
+  test("story frame is a full-bleed 9:16 design, not a card on a background", async ({ page }) => {
+    await stubShareApi(page, { canShare: true });
+    await gotoHome(page);
+    await page.locator("#dock-share-btn").click();
+    await expect(page.locator("#share-modal")).toHaveAttribute("data-card-style", "studio", { timeout: 10_000 });
+
+    const palette = await page.evaluate(() => {
+      const read = (index: number): number[] => {
+        const element = document.querySelector<HTMLElement>(`#card-variant-studio .swatch-val-${index}`);
+        const match = element ? /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(element).backgroundColor) : null;
+        return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [];
+      };
+      return [read(0), read(3)];
+    });
+
+    await page.locator("#share-instagram").click();
+    await expect.poll(() => page.evaluate(() => (window as Window & { __shareFiles?: File[] }).__shareFiles?.length ?? 0)).toBe(1);
+    const analysis = await page.evaluate(async () => {
+      const file = (window as Window & { __shareFiles?: File[] }).__shareFiles?.at(-1);
+      if (!file) return null;
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.drawImage(image, 0, 0);
+      const width = canvas.width;
+      const height = canvas.height;
+      const data = context.getImageData(0, 0, width, height).data;
+      const pixel = (x: number, y: number): number[] => {
+        const index = (y * width + x) * 4;
+        return [data[index] ?? 255, data[index + 1] ?? 255, data[index + 2] ?? 255];
+      };
+      let uniformWhiteRow = false;
+      let whiteBandRows = 0;
+      for (let y = 0; y < height; y += 1) {
+        let white = 0;
+        for (let x = 0; x < width; x += 1) {
+          const index = (y * width + x) * 4;
+          if (data[index] === 250 && data[index + 1] === 250 && data[index + 2] === 252) white += 1;
+        }
+        if (white === width) uniformWhiteRow = true;
+        if ((y < 180 || y >= height - 180) && white > width * 0.25) whiteBandRows += 1;
+      }
+      URL.revokeObjectURL(url);
+      return {
+        width,
+        height,
+        topLeft: pixel(0, 0),
+        bottomLeft: pixel(0, height - 1),
+        uniformWhiteRow,
+        whiteBandRows,
+      };
+    });
+    expect(analysis).not.toBeNull();
+    if (!analysis) return;
+    expect(analysis.width).toBe(1080);
+    expect(analysis.height).toBe(1920);
+    const closeColor = (actual: number[], expected: number[]): boolean =>
+      actual.length === expected.length && actual.every((value, index) => Math.abs(value - (expected[index] ?? 0)) <= 2);
+    expect(closeColor(analysis.topLeft, palette[0] ?? []), `top ${analysis.topLeft.join(",")}`).toBe(true);
+    expect(closeColor(analysis.bottomLeft, palette[1] ?? []), `bottom ${analysis.bottomLeft.join(",")}`).toBe(true);
+    expect(analysis.topLeft).not.toEqual([255, 255, 255]);
+    expect(analysis.bottomLeft).not.toEqual([255, 255, 255]);
+    expect(analysis.uniformWhiteRow).toBe(false);
+    expect(analysis.whiteBandRows).toBe(0);
+  });
+
+  test("only the in-flight native control disables; link composers stay live", async ({ page }) => {
     await stubShareApi(page, { canShare: true, hold: true });
     await gotoHome(page);
     await page.locator("#dock-share-btn").click();
     await expect(page.locator("#share-modal")).toHaveAttribute("data-card-style", "studio", { timeout: 10_000 });
-    await expect(page.locator("#share-x")).toBeEnabled();
-    await page.locator("#share-x").click();
-    await expect(page.locator("#share-x")).toBeDisabled();
-    for (const id of ["share-whatsapp", "share-facebook", "share-instagram", "share-native"]) {
+    const instagram = page.locator("#share-instagram");
+    await expect(instagram).toBeEnabled();
+    await instagram.click();
+    await expect(instagram).toBeDisabled();
+    for (const id of ["share-x", "share-whatsapp", "share-facebook", "share-native"]) {
       await expect(page.locator(`#${id}`)).toBeEnabled();
     }
-    await page.evaluate(() => (window as Window & { __releaseShare?: () => void }).__releaseShare?.());
+    await page.locator("#share-x").click();
+    await expect.poll(async () => (await readShareProbe(page)).openedUrls.length).toBe(1);
     await expect(page.locator("#share-x")).toBeEnabled();
+    await page.evaluate(() => (window as Window & { __releaseShare?: () => void }).__releaseShare?.());
+    await expect(instagram).toBeEnabled();
   });
 
   test("cancelling the native share sheet is silent", async ({ page }) => {
