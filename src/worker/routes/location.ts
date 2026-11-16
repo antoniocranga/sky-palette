@@ -3,19 +3,27 @@
  *
  * The browser reads the photo's EXIF GPS locally (the bytes never leave the
  * device before the upload pipeline strips them), then asks this endpoint for a
- * human-readable place. To keep the zero-third-party-request rule, the lookup
- * only uses the `cities` table already populated by autocomplete; there is no
- * external reverse-geocoding call. When nothing is close enough the client
- * falls back to a formatted coordinate pair.
+ * human-readable place.
+ *
+ * Two tiers keep the answer honest:
+ *   1. A cached city within `NEAR_KM` is good enough and costs no network.
+ *   2. Otherwise the coordinate is reverse geocoded (cached in D1) and the
+ *      resulting name is resolved to a full city row. The `cities` table only
+ *      holds places someone searched before, so it is never trusted for a
+ *      distant match — that is how a point in Constanța used to resolve to a
+ *      village 18 km inland.
  */
 
 import type { City } from "../../shared/types";
 import type { RouteHandler } from "../env";
 import { jsonResponse, logEvent, numberParam } from "../lib/http";
 import { enforceEdgeRateLimit } from "../lib/rate-limit";
+import { reverseCity } from "../lib/reverse";
 
-/** Search radius. Beyond this a coordinate label is more honest than a city. */
-const RADIUS_KM = 100;
+/** A cached city this close needs no second opinion. */
+const NEAR_KM = 3;
+/** Last-resort radius when the reverse geocoder is unavailable. */
+const FALLBACK_KM = 15;
 const EARTH_RADIUS_KM = 6371;
 
 interface CityRow {
@@ -30,6 +38,11 @@ interface CityRow {
   population: number;
 }
 
+interface Match {
+  city: City;
+  distanceKm: number;
+}
+
 export const handleLocation: RouteHandler = async (request, env, ctx, context) => {
   await enforceEdgeRateLimit(env.CITIES_LIMITER, request, env, context, "location");
 
@@ -42,8 +55,8 @@ export const handleLocation: RouteHandler = async (request, env, ctx, context) =
     });
   }
 
-  const latDelta = RADIUS_KM / 111;
-  const lonDelta = RADIUS_KM / Math.max(1, Math.abs(Math.cos((lat * Math.PI) / 180)) * 111);
+  const latDelta = FALLBACK_KM / 111;
+  const lonDelta = FALLBACK_KM / Math.max(1, Math.abs(Math.cos((lat * Math.PI) / 180)) * 111);
 
   let rows: CityRow[] = [];
   try {
@@ -66,31 +79,48 @@ export const handleLocation: RouteHandler = async (request, env, ctx, context) =
     });
   }
 
-  let best: { city: CityRow; distanceKm: number } | null = null;
+  let nearest: Match | null = null;
   for (const row of rows) {
     const distanceKm = haversine(lat, lon, row.lat, row.lon);
-    if (distanceKm <= RADIUS_KM && (!best || distanceKm < best.distanceKm)) {
-      best = { city: row, distanceKm };
+    if (distanceKm <= FALLBACK_KM && (!nearest || distanceKm < nearest.distanceKm)) {
+      nearest = { city: toCity(row), distanceKm };
     }
   }
 
-  const body = {
-    success: true as const,
-    match: best
-      ? {
-          city: toCity(best.city),
-          distanceKm: Math.round(best.distanceKm * 10) / 10,
-        }
-      : null,
-  };
+  let match = nearest && nearest.distanceKm <= NEAR_KM ? nearest : null;
+  let source: "cache" | "reverse" | "fallback" | "none" = match ? "cache" : "none";
+
+  if (!match) {
+    const reversed = await reverseCity(lat, lon, env);
+    if (reversed) {
+      match = { city: reversed, distanceKm: haversine(lat, lon, reversed.lat, reversed.lon) };
+      source = "reverse";
+    } else if (nearest) {
+      match = nearest;
+      source = "fallback";
+    }
+  }
 
   logEvent("info", "location.resolved", {
     requestId: context.requestId,
-    matched: Boolean(best),
+    matched: Boolean(match),
+    source,
     candidates: rows.length,
   });
 
-  return jsonResponse(body, 200, { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
+  return jsonResponse(
+    {
+      success: true as const,
+      match: match
+        ? {
+            city: match.city,
+            distanceKm: Math.round(match.distanceKm * 10) / 10,
+          }
+        : null,
+    },
+    200,
+    { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" },
+  );
 };
 
 function toCity(row: CityRow): City {

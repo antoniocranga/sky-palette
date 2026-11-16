@@ -46,6 +46,7 @@
 
       <h2>Where it lives</h2>
       <p>Photos are stored in Cloudflare R2 and their records in Cloudflare D1, in Cloudflare's European region. The application runs on Cloudflare Workers. Weather data comes from Open-Meteo and is fetched by the server, not your browser.</p>
+      <p>When a photo carries GPS coordinates, the server asks OpenStreetMap's Nominatim service for the nearest place name so the upload can suggest a location. Only the coordinate pair is sent, no identifiers; the answer is cached so repeat uploads do not call it again.</p>
 
       <h2>How long</h2>
       <p>Approved photos stay published until you ask for removal. Pending or rejected photos are kept for moderation and are removed when rejected or deleted. Rate-limit counters are pruned automatically.</p>
@@ -57,7 +58,7 @@
       <p>Published photos are dedicated to the public domain under <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0 1.0</a>.</p>
 
       <h2>Service providers</h2>
-      <p>Cloudflare (hosting, storage, Turnstile bot protection) and Open-Meteo (weather). Turnstile is used only on the upload form; it may set its own short-lived challenge state, governed by Cloudflare's privacy terms.</p>
+      <p>Cloudflare (hosting, storage, Turnstile bot protection), Open-Meteo (weather and place lookup) and OpenStreetMap Nominatim (place names for photo coordinates). Turnstile is used only on the upload form; it may set its own short-lived challenge state, governed by Cloudflare's privacy terms. Place names are © OpenStreetMap contributors.</p>
 
       <p class="muted">Questions: <a href="https://github.com/antoniocranga/sky-palette/issues">GitHub issues</a>.</p>
     </main>

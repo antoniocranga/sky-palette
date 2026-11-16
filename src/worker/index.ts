@@ -24,6 +24,7 @@ import { handlePalette } from "./routes/palette";
 import { handlePhoto } from "./routes/photos";
 import { handlePhotoInfo } from "./routes/photo";
 import { handleSubmit } from "./routes/submit";
+import { pruneGeoCache } from "./lib/reverse";
 import { handleAdmin } from "./routes/admin";
 
 export type { Env } from "./env";
@@ -139,6 +140,7 @@ export default {
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(reapOrphans(env));
+    ctx.waitUntil(pruneGeoCache(env.DB));
   },
 } satisfies ExportedHandler<Env>;
 

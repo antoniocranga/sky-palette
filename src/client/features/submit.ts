@@ -420,8 +420,9 @@ export class SubmitFeature {
       const capture = await readExifCapture(file);
       if (token !== this.fileToken) return;
       if (capture.takenAt) this.applyPhotoTime(capture.takenAt);
-      await this.autofillLocationFromPhoto(capture.gps, token);
-      if (token !== this.fileToken) return;
+      // The place lookup can take a second on a slow upstream; the preview must
+      // not wait behind it. The token guards a stale answer for a replaced file.
+      void this.autofillLocationFromPhoto(capture.gps, token);
       setText(this.fileMeta, "Optimising…");
       const prepared = await preparePhoto(file, decoded.source, decoded.width, decoded.height);
       if (prepared.file.size > MAX_UPLOAD_BYTES) {
