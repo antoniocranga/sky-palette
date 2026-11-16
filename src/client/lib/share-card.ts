@@ -103,3 +103,60 @@ export function storyTextInsideSafeArea(): boolean {
   const { height, margin, safeMargin, contentTop, contentBottom } = STORY_LAYOUT;
   return margin >= safeMargin && contentTop >= safeMargin && contentBottom <= height - safeMargin;
 }
+
+export interface FooterLayout {
+  meta: string;
+  site: string;
+  /** Left edge of the right-anchored site watermark. */
+  siteLeft: number;
+  /** Right edge of the laid-out meta line. */
+  metaRight: number;
+  /** Widest meta line that still clears the watermark by `gap`. */
+  maxMetaWidth: number;
+  truncated: boolean;
+}
+
+/**
+ * Lay out the footer meta line against a right-anchored site watermark.
+ *
+ * The handle is dropped first (so time, phase and date survive), then the
+ * remaining text is ellipsised only if it still cannot fit.
+ */
+export function footerLayout(
+  measure: (text: string) => number,
+  metaText: string,
+  siteText: string,
+  left: number,
+  right: number,
+  gap = 32,
+): FooterLayout {
+  const siteWidth = measure(siteText);
+  const siteLeft = right - siteWidth;
+  const maxMetaWidth = Math.max(0, siteLeft - gap - left);
+  let meta = metaText;
+  let truncated = false;
+
+  if (measure(meta) > maxMetaWidth) {
+    const withoutHandle = metaText.replace(/\s*·\s*@[^\s·]+$/, "").trimEnd();
+    if (withoutHandle && withoutHandle !== metaText && measure(withoutHandle) <= maxMetaWidth) {
+      meta = withoutHandle;
+    } else {
+      const base = withoutHandle || metaText;
+      const ellipsis = "…";
+      let end = base.length;
+      while (end > 0 && measure(`${base.slice(0, end).trimEnd()}${ellipsis}`) > maxMetaWidth) end -= 1;
+      if (end <= 0) meta = measure(ellipsis) <= maxMetaWidth ? ellipsis : "";
+      else meta = `${base.slice(0, end).trimEnd()}${ellipsis}`;
+      truncated = true;
+    }
+  }
+
+  return {
+    meta,
+    site: siteText,
+    siteLeft,
+    metaRight: left + measure(meta),
+    maxMetaWidth,
+    truncated,
+  };
+}
