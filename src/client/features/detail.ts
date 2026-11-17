@@ -12,6 +12,12 @@ import { openPhotoModal } from "./photo-modal";
 import { copyText, isAbortError, prefersReducedMotion, qs, registerAction, setHidden, setText, showToast } from "../lib/dom";
 import { formatDateShort, formatDegrees, formatElevation, formatInstantClock, instantForLocalHour, weatherSummary } from "../lib/format";
 import { STEPS_PER_DAY, STEP_HOURS, Tape, indexForHour } from "../lib/tape";
+import {
+  DEFAULT_GALLERY_SORT_OPTION,
+  GALLERY_SORT_OPTIONS,
+  gallerySortOption,
+  type GallerySortOption,
+} from "../lib/gallery-sort";
 import { computePalette } from "../../shared/palette";
 import { getSolarPosition, getSunTimes } from "../../shared/solar";
 import { clockInZone, fractionalHourInZone, isoDayInZone, parseClock } from "../../shared/time";
@@ -46,7 +52,13 @@ export class DetailFeature {
   private readonly photosEmptyTitle = qs("#detail-photos-empty-title");
   private readonly photosEmptyNote = qs("#detail-photos-empty-note");
   private readonly photosSentinel = qs("#detail-photos-sentinel");
+  private readonly photosEnd = qs("#detail-photos-end");
+  private readonly photosObserver = qs("#detail-photos-observer");
   private readonly photosSkeleton = qs("#detail-photos-skeleton");
+  private readonly photosSortButton = qs<HTMLButtonElement>("#photo-sort-btn");
+  private readonly photosSortLabel = qs("#photo-sort-label");
+  private readonly photosSortPopover = qs<HTMLElement>("#photo-sort-popover");
+  private readonly photosSortWrap = qs<HTMLElement>("#photo-sort-btn")?.parentElement ?? null;
   private readonly scrollTopButton = qs<HTMLButtonElement>("#detail-scroll-top");
   private readonly timelapseButton = qs<HTMLButtonElement>("#timelapse-btn");
   private readonly playIcon = qs("#play-icon");
@@ -62,6 +74,8 @@ export class DetailFeature {
   private photoCursor: string | null = null;
   private photosLoading = false;
   private photosError = false;
+  private photoSort: GallerySortOption = DEFAULT_GALLERY_SORT_OPTION;
+  private renderedPhotoIds = new Set<string>();
   private photoChainFrame: number | null = null;
   private galleryGeneration = 0;
   private photoObserver: IntersectionObserver | null = null;
@@ -100,18 +114,65 @@ export class DetailFeature {
       if (screen !== "detail") setHidden(this.scrollTopButton, true);
       else this.updateScrollTopButton();
     });
-    if (this.photosSentinel && "IntersectionObserver" in window) {
+    const observerTarget = this.photosObserver ?? this.photosSentinel;
+    if (observerTarget && "IntersectionObserver" in window) {
       this.photoObserver = new IntersectionObserver(
         (entries) => { if (entries.some((entry) => entry.isIntersecting)) void this.loadMorePhotos(); },
         { root: qs("#screen-detail"), rootMargin: "0px 0px 200px 0px" },
       );
-      this.photoObserver.observe(this.photosSentinel);
+      this.photoObserver.observe(observerTarget);
     }
 
     registerAction("open-day", (element) => {
       const index = Number(element.dataset.index);
       if (Number.isFinite(index)) this.open(index, element);
     });
+
+    registerAction("toggle-photo-sort", () => this.togglePhotoSort());
+
+    registerAction("set-photo-sort", (element) => {
+      const option = gallerySortOption(element.dataset.sortOption);
+      const changed = option.id !== this.photoSort.id;
+      this.photoSort = option;
+      this.syncPhotoSortUi();
+      this.closePhotoSort(true);
+      if (changed) void this.loadPhotos();
+    });
+
+    this.photosSortButton?.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      this.openPhotoSort(event.key === "ArrowUp");
+    });
+
+    this.photosSortPopover?.addEventListener("keydown", (event) => this.onPhotoSortKeyDown(event));
+
+    document.addEventListener("pointerdown", (event) => {
+      if (!this.isPhotoSortOpen()) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (this.photosSortWrap?.contains(target)) return;
+      this.closePhotoSort(false);
+    }, { passive: true });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !this.isPhotoSortOpen()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.closePhotoSort(true);
+    });
+
+    this.photosSortWrap?.addEventListener("focusout", (event) => {
+      if (!this.isPhotoSortOpen()) return;
+      // Safari does not focus a button on tap, so a null relatedTarget here is
+      // usually a click inside the popover: let the click handler decide.
+      const next = event.relatedTarget;
+      if (!(next instanceof Node)) return;
+      if (this.photosSortWrap?.contains(next)) return;
+      this.closePhotoSort(false);
+    });
+
+    this.syncPhotoSortUi();
 
     registerAction("timelapse", () => this.toggleTimelapse());
 
@@ -522,6 +583,69 @@ export class DetailFeature {
     }
   }
 
+  private isPhotoSortOpen(): boolean {
+    return Boolean(this.photosSortPopover && !this.photosSortPopover.classList.contains("hidden"));
+  }
+
+  private togglePhotoSort(): void {
+    if (this.isPhotoSortOpen()) this.closePhotoSort(true);
+    else this.openPhotoSort(false);
+  }
+
+  private openPhotoSort(focusLast: boolean): void {
+    if (!this.photosSortPopover) return;
+    this.photosSortPopover.classList.remove("hidden");
+    this.photosSortButton?.setAttribute("aria-expanded", "true");
+    const target = focusLast
+      ? GALLERY_SORT_OPTIONS[GALLERY_SORT_OPTIONS.length - 1] ?? this.photoSort
+      : this.photoSort;
+    this.focusPhotoSortOption(target.id);
+  }
+
+  private closePhotoSort(restoreFocus: boolean): void {
+    if (!this.photosSortPopover) return;
+    this.photosSortPopover.classList.add("hidden");
+    this.photosSortButton?.setAttribute("aria-expanded", "false");
+    if (restoreFocus) this.photosSortButton?.focus({ preventScroll: true });
+  }
+
+  private focusPhotoSortOption(id: string): void {
+    const button = qs<HTMLElement>(`#photo-sort-${id}`);
+    button?.focus({ preventScroll: true });
+  }
+
+  private onPhotoSortKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+    const buttons = GALLERY_SORT_OPTIONS.map((option) => qs<HTMLElement>(`#photo-sort-${option.id}`)).filter(
+      (button): button is HTMLElement => Boolean(button),
+    );
+    if (buttons.length === 0) return;
+    event.preventDefault();
+    const activeIndex = buttons.findIndex((button) => button === document.activeElement);
+    let nextIndex: number;
+    if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = buttons.length - 1;
+    else if (event.key === "ArrowDown") nextIndex = (activeIndex + 1 + buttons.length) % buttons.length;
+    else nextIndex = (activeIndex - 1 + buttons.length) % buttons.length;
+    buttons[nextIndex]?.focus({ preventScroll: true });
+  }
+
+  private syncPhotoSortUi(): void {
+    setText(this.photosSortLabel, this.photoSort.label);
+    for (const option of GALLERY_SORT_OPTIONS) {
+      const button = qs<HTMLElement>(`#photo-sort-${option.id}`);
+      if (!button) continue;
+      const active = option.id === this.photoSort.id;
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.classList.toggle("bg-black", active);
+      button.classList.toggle("bg-neutral-100", !active);
+      button.classList.toggle("text-white", active);
+      button.classList.toggle("text-neutral-700", !active);
+      button.classList.toggle("hover:bg-black", active);
+      button.classList.toggle("hover:bg-neutral-200", !active);
+    }
+  }
+
   private async loadPhotos(): Promise<void> {
     const city = store.state.city;
     const generation = ++this.galleryGeneration;
@@ -529,9 +653,12 @@ export class DetailFeature {
     this.photosError = false;
     this.photosLoading = false;
     if (this.photosSkeleton) setHidden(this.photosSkeleton, false);
-    if (this.photosGrid) setHidden(this.photosGrid, true);
+    // A reset clears the tiles but never hides the grid: the skeleton sits
+    // beside it, so switching sort cannot collapse the section.
+    this.resetPhotoGrid();
     if (this.photosEmpty) setHidden(this.photosEmpty, true);
     if (this.photosSentinel) setHidden(this.photosSentinel, true);
+    if (this.photosEnd) setHidden(this.photosEnd, true);
     this.galleryController?.abort();
     const controller = new AbortController();
     this.galleryController = controller;
@@ -539,6 +666,8 @@ export class DetailFeature {
     this.photos = [];
     try {
       const page = await getGalleryPage(city.lat, city.lon, null, 6, {
+        sort: this.photoSort.sort,
+        order: this.photoSort.order,
         signal: controller.signal,
         retry: () => void this.loadPhotos(),
       });
@@ -554,6 +683,8 @@ export class DetailFeature {
     } finally {
       if (generation === this.galleryGeneration) {
         if (this.photosSkeleton) setHidden(this.photosSkeleton, true);
+        if (this.photosSentinel) setHidden(this.photosSentinel, true);
+        this.syncPhotoEndState();
         this.schedulePhotoChain();
       }
     }
@@ -566,12 +697,17 @@ export class DetailFeature {
     const cursor = this.photoCursor;
     this.photosLoading = true;
     this.cancelPhotoChain();
+    // The grid stays visible and keeps every loaded image; the skeleton only
+    // adds placeholder rows below it while the next page is in flight.
     if (this.photosSkeleton) setHidden(this.photosSkeleton, false);
     if (this.photosSentinel) setHidden(this.photosSentinel, false);
+    if (this.photosEnd) setHidden(this.photosEnd, true);
     const city = store.state.city;
     this.galleryController = new AbortController();
     try {
       const page = await getGalleryPage(city.lat, city.lon, cursor, 6, {
+        sort: this.photoSort.sort,
+        order: this.photoSort.order,
         signal: this.galleryController.signal,
         retry: () => void this.loadMorePhotos(),
       });
@@ -579,7 +715,9 @@ export class DetailFeature {
       this.photos = this.uniquePhotos([...this.photos, ...page.photos]);
       const next = page.nextCursor ?? null;
       this.photoCursor = next === cursor ? null : next;
-      this.renderPhotos();
+      // Append-only: existing tiles (and their decoded images) are never
+      // replaced, which is what caused the white flash while scrolling.
+      this.appendPhotoTiles(page.photos);
     } catch (error) {
       if (generation !== this.galleryGeneration) return;
       if (isAbortError(error) || (error instanceof ApiError && error.code === "aborted")) return;
@@ -588,9 +726,20 @@ export class DetailFeature {
       if (generation !== this.galleryGeneration) return;
       this.photosLoading = false;
       if (this.photosSkeleton) setHidden(this.photosSkeleton, true);
-      if (this.photosSentinel) setHidden(this.photosSentinel, !this.photoCursor);
+      if (this.photosSentinel) setHidden(this.photosSentinel, true);
+      this.syncPhotoEndState();
       if (!this.photosError) this.schedulePhotoChain();
     }
+  }
+
+  /** Show the quiet end line once every page has landed, and only then. */
+  private syncPhotoEndState(): void {
+    const show =
+      !this.photosLoading &&
+      !this.photosError &&
+      this.photos.length > 0 &&
+      this.photoCursor === null;
+    setHidden(this.photosEnd, !show);
   }
 
   private cancelPhotoChain(): void {
@@ -611,10 +760,10 @@ export class DetailFeature {
   }
 
   private sentinelInRange(): boolean {
-    const sentinel = this.photosSentinel;
+    const target = this.photosObserver ?? this.photosSentinel;
     const screen = qs<HTMLElement>("#screen-detail");
-    if (!sentinel || sentinel.hidden || !screen) return false;
-    const sentinelRect = sentinel.getBoundingClientRect();
+    if (!target || target.hidden || !screen) return false;
+    const sentinelRect = target.getBoundingClientRect();
     const screenRect = screen.getBoundingClientRect();
     return sentinelRect.bottom >= screenRect.top && sentinelRect.top <= screenRect.bottom + 200;
   }
@@ -625,7 +774,10 @@ export class DetailFeature {
     this.galleryController?.abort();
     this.galleryController = null;
     this.photosLoading = false;
+    this.photosError = false;
     if (this.photosSkeleton) setHidden(this.photosSkeleton, true);
+    if (this.photosSentinel) setHidden(this.photosSentinel, true);
+    if (this.photosEnd) setHidden(this.photosEnd, true);
   }
 
   private uniquePhotos(photos: GalleryPhoto[]): GalleryPhoto[] {
@@ -637,25 +789,22 @@ export class DetailFeature {
     });
   }
 
-  private photoCityLabel(photo: GalleryPhoto): string | null {
-    const slug = photo.citySlug;
-    if (!slug) return null;
-    const current = store.state.city;
-    // The API returns a slug, not a display name. Only use a label we can be
-    // certain about; otherwise the tile shows just the contributor tag.
-    return slug === current.slug ? current.name : null;
+  private resetPhotoGrid(): void {
+    this.renderedPhotoIds.clear();
+    this.photosGrid?.replaceChildren();
   }
 
   private renderPhotos(state: "ready" | "error" = "ready"): void {
     if (!this.photosGrid) return;
     if (this.photosSkeleton) setHidden(this.photosSkeleton, true);
-    this.photosGrid.replaceChildren();
+    this.resetPhotoGrid();
     setHidden(this.photosSection, false);
 
     if (this.photos.length === 0) {
       setHidden(this.photosEmpty, false);
       setHidden(this.photosGrid, true);
       if (this.photosSentinel) setHidden(this.photosSentinel, true);
+      if (this.photosEnd) setHidden(this.photosEnd, true);
       setText(
         this.photosEmptyTitle,
         state === "error"
@@ -673,47 +822,66 @@ export class DetailFeature {
 
     setHidden(this.photosEmpty, true);
     setHidden(this.photosGrid, false);
-    if (this.photosSentinel) setHidden(this.photosSentinel, !this.photoCursor);
+    this.appendPhotoTiles(this.photos);
+  }
 
-    this.photos.forEach((photo) => {
-      const tile = document.createElement("button");
-      tile.type = "button";
-      tile.className = "photo-tile";
-      tile.dataset.photoId = photo.id;
+  /**
+   * Append-only page insert. Existing tiles are never detached or rebuilt, so
+   * a loaded image keeps its bitmap and cannot flash white on a new page.
+   */
+  private appendPhotoTiles(photos: GalleryPhoto[]): void {
+    if (!this.photosGrid) return;
+    const fragment = document.createDocumentFragment();
+    for (const photo of photos) {
+      if (this.renderedPhotoIds.has(photo.id)) continue;
+      this.renderedPhotoIds.add(photo.id);
+      fragment.appendChild(this.createPhotoTile(photo));
+    }
+    if (!fragment.childNodes.length) return;
+    setHidden(this.photosEmpty, true);
+    setHidden(this.photosGrid, false);
+    this.photosGrid.appendChild(fragment);
+  }
 
-      const image = document.createElement("img");
-      image.className = "photo-tile-img";
-      image.loading = "lazy";
-      image.decoding = "async";
-      image.src = photo.thumbUrl || photo.url;
-      image.width = photo.width;
-      image.height = photo.height;
-      image.alt = `Sky photo by @${photo.handle}, ${formatDateShort(photo.capturedAt.slice(0, 10))}`;
-      const shade = document.createElement("span");
-      shade.className = "photo-tile-shade";
-      const copy = document.createElement("span");
-      copy.className = "photo-tile-copy";
-      const time = document.createElement("span");
-      time.className = "photo-tile-time";
-      time.textContent = formatInstantClock(photo.capturedAt, store.state.city.timezone);
-      const location = document.createElement("span");
-      location.className = "photo-tile-location";
-      const cityLabel = this.photoCityLabel(photo);
-      if (cityLabel) {
-        const city = document.createElement("span");
-        city.className = "photo-tile-city";
-        city.textContent = cityLabel;
-        location.appendChild(city);
-      }
-      const tag = document.createElement("span");
-      tag.className = "photo-tile-tag";
-      tag.textContent = `@${photo.handle}`;
-      location.appendChild(tag);
-      copy.append(time, location);
-      tile.append(image, shade, copy);
-      tile.addEventListener("click", () => openPhotoModal(photo));
-      this.photosGrid?.appendChild(tile);
-    });
+  private createPhotoTile(photo: GalleryPhoto): HTMLButtonElement {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "photo-tile";
+    tile.dataset.photoId = photo.id;
+
+    const image = document.createElement("img");
+    image.className = "photo-tile-img is-loading";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.width = photo.width;
+    image.height = photo.height;
+    image.alt = `Sky photo by @${photo.handle}, ${formatDateShort(photo.capturedAt.slice(0, 10))}`;
+    const reveal = (): void => {
+      image.classList.remove("is-loading");
+      image.classList.add("is-loaded");
+    };
+    image.addEventListener("load", reveal, { once: true });
+    image.addEventListener("error", reveal, { once: true });
+    image.src = photo.thumbUrl || photo.url;
+    if (image.complete && image.naturalWidth > 0) requestAnimationFrame(reveal);
+
+    const shade = document.createElement("span");
+    shade.className = "photo-tile-shade";
+    const copy = document.createElement("span");
+    copy.className = "photo-tile-copy";
+    const time = document.createElement("span");
+    time.className = "photo-tile-time";
+    time.textContent = formatInstantClock(photo.capturedAt, store.state.city.timezone);
+    const location = document.createElement("span");
+    location.className = "photo-tile-location";
+    const tag = document.createElement("span");
+    tag.className = "photo-tile-tag";
+    tag.textContent = `@${photo.handle}`;
+    location.appendChild(tag);
+    copy.append(time, location);
+    tile.append(image, shade, copy);
+    tile.addEventListener("click", () => openPhotoModal(photo));
+    return tile;
   }
 
   private dayRelation(): "past" | "today" | "future" {

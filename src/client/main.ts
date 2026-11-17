@@ -285,8 +285,16 @@ function currentRoute(): AppRoute {
 function writeRoute(mode: "push" | "replace"): void {
   if (hydrating) return;
   const path = serializeRoute(currentRoute());
-  const photo = new URL(window.location.href).searchParams.get("photo");
-  const target = photo ? `${path}${path.includes("?") ? "&" : "?"}photo=${encodeURIComponent(photo)}` : path;
+  // Photo deep links live beside the route: `tag` is the handle link, `photo`
+  // is the legacy id link. Keep whichever the URL carries.
+  const params = new URL(window.location.href).searchParams;
+  const extras = new URLSearchParams();
+  const tag = params.get("tag");
+  const photo = params.get("photo");
+  if (tag) extras.set("tag", tag);
+  if (photo) extras.set("photo", photo);
+  const extraQuery = extras.toString();
+  const target = extraQuery ? `${path}${path.includes("?") ? "&" : "?"}${extraQuery}` : path;
   if (`${window.location.pathname}${window.location.search}` === target) return;
   if (mode === "push") window.history.pushState({}, "", target);
   else window.history.replaceState({}, "", target);

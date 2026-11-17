@@ -111,6 +111,7 @@ type ShareProbe = {
   files: Array<{ name: string; type: string; size: number; width: number; height: number }>;
   title: string;
   text: string;
+  url: string;
   openedUrl: string;
   openedUrls: string[];
   openDuringClick: boolean[];
@@ -127,6 +128,7 @@ async function stubShareApi(
         files: [] as Array<{ name: string; type: string; size: number; width: number; height: number }>,
         title: "",
         text: "",
+        url: "",
         openedUrl: "",
         openedUrls: [] as string[],
         openDuringClick: [] as boolean[],
@@ -139,10 +141,11 @@ async function stubShareApi(
       });
       Object.defineProperty(navigator, "share", {
         configurable: true,
-        value: async (data: { files?: File[]; title?: string; text?: string }) => {
+        value: async (data: { files?: File[]; title?: string; text?: string; url?: string }) => {
           probe.calls += 1;
           probe.title = data.title ?? "";
           probe.text = data.text ?? "";
+          probe.url = data.url ?? "";
           const file = data.files?.[0];
           if (file) {
             const bytes = new Uint8Array(await file.arrayBuffer());
@@ -190,8 +193,27 @@ async function stubShareApi(
 async function readShareProbe(page: import("@playwright/test").Page): Promise<ShareProbe> {
   return page.evaluate(() => {
     const probe = (window as Window & { __shareProbe?: ShareProbe }).__shareProbe;
-    return probe ?? { calls: 0, files: [], title: "", text: "", openedUrl: "", openedUrls: [], openDuringClick: [] };
+    return probe ?? { calls: 0, files: [], title: "", text: "", url: "", openedUrl: "", openedUrls: [], openDuringClick: [] };
   });
+}
+
+/** Records clipboard writes into `window.__copied` before the app boots. */
+async function stubClipboard(page: import("@playwright/test").Page): Promise<void> {
+  await page.addInitScript(() => {
+    (window as Window & { __copied?: string }).__copied = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as Window & { __copied?: string }).__copied = text;
+        },
+      },
+    });
+  });
+}
+
+async function readCopied(page: import("@playwright/test").Page): Promise<string> {
+  return page.evaluate(() => (window as Window & { __copied?: string }).__copied ?? "");
 }
 
 test.describe("Sky Palette app", () => {
@@ -896,24 +918,309 @@ test.describe("Sky Palette app", () => {
     expect(new Set(cursors).size).toBe(cursors.length);
   });
 
-  test("community tile keeps the full tag and stacks city then tag on phones", async ({ page }) => {
+  test("community append keeps loaded tiles and fades in only the new page", async ({ page }) => {
+    await gotoGallery(page);
+    await openFirstDay(page);
+    const grid = page.locator("#detail-photos");
+    const tiles = grid.locator(".photo-tile");
+    const first = tiles.first();
+    await expect(first.locator("img")).toHaveClass(/is-loaded/);
+    await expect(grid).toBeVisible();
+    await first.evaluate((element) => {
+      (element as HTMLElement).dataset.probe = "kept";
+    });
+    const firstSrc = await first.locator("img").getAttribute("src");
+    const firstTime = await first.locator(".photo-tile-time").textContent();
+    const firstGeometry = await first.evaluate((element) => {
+      const tile = element as HTMLElement;
+      return { offsetTop: tile.offsetTop, offsetLeft: tile.offsetLeft, offsetWidth: tile.offsetWidth, offsetHeight: tile.offsetHeight };
+    });
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      if ((await tiles.count()) > 6) break;
+      await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(300);
+    }
+    await expect.poll(async () => tiles.count(), { timeout: 10_000 }).toBeGreaterThan(6);
+
+    // The first tile is the same element, not a rebuilt one, and its bitmap
+    // never went back through the skeleton/white state.
+    await expect(first).toHaveAttribute("data-probe", "kept");
+    await expect(grid).toBeVisible();
+    const probe = await first.evaluate((element) => {
+      const image = element.querySelector<HTMLImageElement>("img");
+      if (!image) return null;
+      return {
+        connected: element.isConnected,
+        src: image.getAttribute("src"),
+        opacity: getComputedStyle(image).opacity,
+        classes: image.className,
+        time: element.querySelector(".photo-tile-time")?.textContent ?? "",
+      };
+    });
+    expect(probe).not.toBeNull();
+    if (!probe) return;
+    expect(probe.connected).toBe(true);
+    expect(probe.src).toBe(firstSrc);
+    expect(probe.opacity).toBe("1");
+    expect(probe.classes).toContain("is-loaded");
+    expect(probe.time).toBe(firstTime);
+    const afterGeometry = await first.evaluate((element) => {
+      const tile = element as HTMLElement;
+      return { offsetTop: tile.offsetTop, offsetLeft: tile.offsetLeft, offsetWidth: tile.offsetWidth, offsetHeight: tile.offsetHeight };
+    });
+    expect(afterGeometry).toEqual(firstGeometry);
+
+    // Every tile after the first page is present exactly once.
+    const ids = await tiles.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-photo-id")));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("community sort offers four orders and paginates with the selected one", async ({ page, api }) => {
+    await gotoGallery(page);
+    await openFirstDay(page);
+
+    const button = page.locator("#photo-sort-btn");
+    await expect(button).toContainText("Newest uploads");
+    const buttonBox = await button.boundingBox();
+    expect(buttonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    // The button and the section label share one optical centre line, and the
+    // row keeps justify-between so the label can truncate first.
+    const header = page.locator("#detail-photos-section > div").first();
+    const alignment = await header.evaluate((row) => {
+      const label = row.querySelector("span");
+      const trigger = row.querySelector<HTMLElement>("#photo-sort-btn");
+      if (!label || !trigger) return null;
+      const labelRect = label.getBoundingClientRect();
+      const buttonRect = trigger.getBoundingClientRect();
+      return {
+        labelCentre: labelRect.top + labelRect.height / 2,
+        buttonCentre: buttonRect.top + buttonRect.height / 2,
+        justifyContent: getComputedStyle(row).justifyContent,
+      };
+    });
+    expect(alignment).not.toBeNull();
+    if (alignment) {
+      expect(Math.abs(alignment.labelCentre - alignment.buttonCentre)).toBeLessThanOrEqual(1);
+      expect(alignment.justifyContent).toBe("space-between");
+    }
+
+    await button.click();
+    const popover = page.locator("#photo-sort-popover");
+    await expect(popover).toBeVisible();
+    const options = popover.locator(".photo-sort-option");
+    await expect(options).toHaveCount(4);
+    await expect(options).toHaveText(["Newest uploads", "Oldest uploads", "Newest captures", "Oldest captures"]);
+    for (let index = 0; index < 4; index += 1) {
+      const option = options.nth(index);
+      const box = await option.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      const radius = await option.evaluate((element) => Number.parseFloat(getComputedStyle(element).borderTopLeftRadius));
+      expect(radius).toBeGreaterThanOrEqual(999);
+    }
+    const [activeStyle, idleStyle] = await options.evaluateAll((elements) =>
+      elements.slice(0, 2).map((element) => {
+        const style = getComputedStyle(element);
+        const lightness = (value: string): number | null => {
+          const oklch = value.match(/oklch\(([\d.]+)/);
+          if (oklch) return Number(oklch[1]);
+          const oklab = value.match(/oklab\(([\d.]+)/);
+          if (oklab) return Number(oklab[1]);
+          const rgb = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          return rgb ? (Number(rgb[1]) + Number(rgb[2]) + Number(rgb[3])) / 765 : null;
+        };
+        return { background: style.backgroundColor, color: style.color, lightness: lightness(style.backgroundColor) };
+      }),
+    );
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(80);
+    expect(activeStyle?.background).toBe("rgb(0, 0, 0)");
+    expect(activeStyle?.color).toBe("rgb(255, 255, 255)");
+    expect(idleStyle?.background).not.toBe(activeStyle?.background);
+    expect(idleStyle?.color).not.toBe(activeStyle?.color);
+    expect(idleStyle?.lightness).toBeGreaterThan(0.9);
+    if ((page.viewportSize()?.width ?? 0) >= 1000) {
+      const idleColour = idleStyle?.background;
+      await options.nth(1).hover();
+      await expect
+        .poll(async () => options.nth(1).evaluate((element) => getComputedStyle(element).backgroundColor))
+        .not.toBe(idleColour);
+    }
+
+    // Escape closes only the popover; the detail screen stays open.
+    await page.keyboard.press("Escape");
+    await expect(popover).toBeHidden();
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#screen-detail")).toHaveClass(/active/);
+    await expect(page.locator("#photo-modal")).not.toHaveClass(/is-open/);
+
+    // Keyboard open lands on the active option, arrows move the roving focus.
+    await button.press("ArrowDown");
+    await expect(popover).toBeVisible();
+    await expect(page.locator("#photo-sort-upload-desc")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#photo-sort-upload-asc")).toBeFocused();
+
+    await page.locator("#photo-sort-captured-asc").click();
+    await expect(popover).toBeHidden();
+    await expect(button).toContainText("Oldest captures");
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+
+    // The reset loads page 1 of the new order: oldest capture first.
+    const tiles = page.locator("#detail-photos .photo-tile");
+    await expect(tiles.first()).toHaveAttribute("data-photo-id", "photo-24");
+    expect(await tiles.count()).toBeGreaterThanOrEqual(6);
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      if ((await tiles.count()) >= 24) break;
+      await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(300);
+    }
+    await expect(tiles).toHaveCount(24, { timeout: 10_000 });
+
+    const pages = api.requests
+      .filter((request) => request.startsWith("GET /api/gallery?"))
+      .map((request) => new URL(request.slice(4), "http://local").searchParams);
+    const selected = pages.filter((params) => params.get("sort") === "captured");
+    expect(selected.length).toBeGreaterThanOrEqual(2);
+    for (const params of selected) expect(params.get("order")).toBe("asc");
+    const cursors = selected.map((params) => params.get("cursor")).filter((cursor): cursor is string => Boolean(cursor));
+    expect(new Set(cursors).size).toBe(cursors.length);
+
+    // Switching again reuses the same contract for the default order.
+    await button.click();
+    await page.locator("#photo-sort-upload-desc").click();
+    await expect(button).toContainText("Newest uploads");
+    await expect(tiles.first()).toHaveAttribute("data-photo-id", "photo-1");
+  });
+
+  test("community end line replaces the loader once every page lands", async ({ page, api }) => {
+    api.setGallerySize(12);
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slowNextPage = async (route: import("@playwright/test").Route): Promise<void> => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.has("cursor")) await gate;
+      await route.fallback();
+    };
+    await page.route("**/api/gallery**", slowNextPage);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    const tiles = page.locator("#detail-photos .photo-tile");
+    const loading = page.locator("#detail-photos-sentinel");
+    const end = page.locator("#detail-photos-end");
+
+    await expect(tiles).toHaveCount(6);
+    await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    // The loader is only on screen while the second page is in flight.
+    await expect(loading).toBeVisible();
+    await expect(loading).toHaveText("Loading more skies…");
+    await expect(end).toBeHidden();
+
+    release();
+    await expect(tiles).toHaveCount(12, { timeout: 10_000 });
+    await expect(loading).toBeHidden();
+    await expect(end).toBeVisible();
+    await expect(end).toHaveText("You've seen all the skies.");
+    await expect(end).toHaveAttribute("role", "status");
+    await expect(page.locator("#detail-photos-end")).toHaveCount(1);
+    await page.unroute("**/api/gallery**", slowNextPage);
+  });
+
+  test("a single-page community result shows the end line only after it settles", async ({ page, api }) => {
+    api.setGallerySize(3);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await expect(page.locator("#detail-photos .photo-tile")).toHaveCount(3);
+    await expect(page.locator("#detail-photos-sentinel")).toBeHidden();
+    await expect(page.locator("#detail-photos-end")).toBeVisible();
+    await expect(page.locator("#detail-photos-end")).toHaveText("You've seen all the skies.");
+  });
+
+  test("changing sort hides the end line for page 1 and restores it at the end", async ({ page, api }) => {
+    api.setGallerySize(12);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    const tiles = page.locator("#detail-photos .photo-tile");
+    const loading = page.locator("#detail-photos-sentinel");
+    const end = page.locator("#detail-photos-end");
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if ((await tiles.count()) >= 12) break;
+      await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(300);
+    }
+    await expect(tiles).toHaveCount(12, { timeout: 10_000 });
+    await expect(end).toBeVisible();
+
+    // Hold the new sort's first page so the reset state is observable.
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slowSort = async (route: import("@playwright/test").Route): Promise<void> => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("sort") === "captured") await gate;
+      await route.fallback();
+    };
+    await page.route("**/api/gallery**", slowSort);
+    await page.locator("#photo-sort-btn").click();
+    await page.locator("#photo-sort-captured-desc").click();
+
+    await expect(end).toBeHidden();
+    await expect(loading).toBeHidden();
+    release();
+    await expect(tiles.first()).toHaveAttribute("data-photo-id", "photo-1");
+
+    // Scroll until the second page of the new sort has been appended; the end
+    // line only becomes correct after the cursor is exhausted.
+    await expect
+      .poll(
+        async () => {
+          await page.locator("#screen-detail").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+          return tiles.count();
+        },
+        { timeout: 15_000, intervals: [300, 500, 800] },
+      )
+      .toBe(12);
+    await expect(end).toBeVisible();
+    await page.unroute("**/api/gallery**", slowSort);
+  });
+
+  test("sort popover opens clear of the dock", async ({ page }) => {
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#photo-sort-btn").click();
+    const popover = await page.locator("#photo-sort-popover").boundingBox();
+    const dock = await page.locator("#app-dock").boundingBox();
+    expect(popover).not.toBeNull();
+    expect(dock).not.toBeNull();
+    if (popover && dock) {
+      expect(popover.y + popover.height).toBeLessThanOrEqual(dock.y);
+      expect(popover.y).toBeGreaterThanOrEqual(0);
+    }
+    // Every option is reachable and clickable.
+    await page.locator("#photo-sort-captured-asc").click();
+    await expect(page.locator("#photo-sort-label")).toHaveText("Oldest captures");
+  });
+
+  test("community tile shows the hour then the full tag, with no city line", async ({ page }) => {
     await gotoGallery(page);
     await page.setViewportSize({ width: 393, height: 852 });
     await openFirstDay(page);
     const tile = page.locator("#detail-photos .photo-tile").filter({ hasText: "@sky-bucharest-extra8" }).first();
     await expect(tile).toBeVisible();
+    await expect(tile.locator(".photo-tile-city")).toHaveCount(0);
 
     const read = () =>
       tile.evaluate((element) => {
-        const city = element.querySelector<HTMLElement>(".photo-tile-city");
+        const time = element.querySelector<HTMLElement>(".photo-tile-time");
         const tag = element.querySelector<HTMLElement>(".photo-tile-tag");
-        if (!city || !tag) return null;
+        if (!time || !tag) return null;
         const tileRect = element.getBoundingClientRect();
-        const cityRect = city.getBoundingClientRect();
+        const timeRect = time.getBoundingClientRect();
         const tagRect = tag.getBoundingClientRect();
-        const style = getComputedStyle(element.querySelector<HTMLElement>(".photo-tile-location")!);
         return {
-          city: city.textContent,
+          time: time.textContent,
           tag: tag.textContent,
           tagScrollWidth: tag.scrollWidth,
           tagClientWidth: tag.clientWidth,
@@ -921,34 +1228,77 @@ test.describe("Sky Palette app", () => {
           tagRight: tagRect.right,
           tileLeft: tileRect.left,
           tileRight: tileRect.right,
-          cityTop: cityRect.top,
-          cityBottom: cityRect.bottom,
+          timeBottom: timeRect.bottom,
           tagTop: tagRect.top,
-          direction: style.flexDirection,
-          separator: getComputedStyle(city, "::after").content,
+          tagFontSize: Number.parseFloat(getComputedStyle(tag).fontSize),
+          timeFontSize: Number.parseFloat(getComputedStyle(time).fontSize),
         };
       });
 
     const phone = await read();
     expect(phone).not.toBeNull();
     if (!phone) return;
-    expect(phone.city).toBe("Bucharest");
+    expect(phone.time).toMatch(/^\d{2}:\d{2}$/);
     expect(phone.tag).toBe("@sky-bucharest-extra8");
     expect(phone.tagScrollWidth).toBeLessThanOrEqual(phone.tagClientWidth);
     expect(phone.tagLeft).toBeGreaterThanOrEqual(phone.tileLeft - 1);
     expect(phone.tagRight).toBeLessThanOrEqual(phone.tileRight + 1);
-    expect(phone.direction).toBe("column");
-    expect(phone.tagTop).toBeGreaterThanOrEqual(phone.cityBottom - 1);
+    expect(phone.tagTop).toBeGreaterThanOrEqual(phone.timeBottom - 1);
+    expect(phone.timeFontSize).toBeGreaterThanOrEqual(14);
+    expect(phone.timeFontSize).toBeLessThanOrEqual(15);
+    expect(phone.tagFontSize).toBe(9);
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForTimeout(200);
     const wide = await read();
     expect(wide).not.toBeNull();
     if (!wide) return;
-    expect(wide.direction).toBe("row");
-    expect(Math.abs(wide.tagTop - wide.cityTop)).toBeLessThanOrEqual(1);
-    expect(wide.separator).toContain("·");
+    expect(wide.tag).toBe("@sky-bucharest-extra8");
     expect(wide.tagScrollWidth).toBeLessThanOrEqual(wide.tagClientWidth);
+    expect(wide.tagRight).toBeLessThanOrEqual(wide.tileRight + 1);
+    expect(wide.tagTop).toBeGreaterThanOrEqual(wide.timeBottom - 1);
+  });
+
+  test("detail uses one vertical rhythm and breathes around the community row", async ({ page }) => {
+    await gotoGallery(page);
+    await openFirstDay(page);
+    for (const width of [393, 820, 1440]) {
+      await page.setViewportSize({ width, height: width === 393 ? 852 : width === 820 ? 1180 : 900 });
+      await page.waitForTimeout(150);
+      const metrics = await page.evaluate(() => {
+        const content = document.querySelector<HTMLElement>(".detail-content");
+        if (!content) return null;
+        const rects = Array.from(content.children)
+          .filter((element) => !(element as HTMLElement).hidden && getComputedStyle(element).display !== "none")
+          .map((element) => element.getBoundingClientRect());
+        const gaps: number[] = [];
+        for (let index = 1; index < rects.length; index += 1) {
+          gaps.push(Math.round((rects[index]!.top - rects[index - 1]!.bottom) * 100) / 100);
+        }
+        const row = document.querySelector<HTMLElement>("#detail-photos-section > div");
+        const grid = document.querySelector<HTMLElement>("#detail-photos");
+        const screen = document.querySelector<HTMLElement>("#screen-detail");
+        return {
+          rowGap: Number.parseFloat(getComputedStyle(content).rowGap),
+          gaps,
+          rowToGrid: row && grid ? Math.round((grid.getBoundingClientRect().top - row.getBoundingClientRect().bottom) * 100) / 100 : null,
+          overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          scrollable: screen ? screen.scrollHeight > screen.clientHeight : false,
+        };
+      });
+      expect(metrics).not.toBeNull();
+      if (!metrics) return;
+      const expected = width < 640 ? 20 : 24;
+      expect(metrics.rowGap, `section gap at ${width}`).toBe(expected);
+      for (const gap of metrics.gaps) {
+        expect(gap, `every section gap at ${width}`).toBeGreaterThanOrEqual(expected - 0.5);
+        expect(gap, `every section gap at ${width}`).toBeLessThanOrEqual(expected + 0.5);
+      }
+      expect(metrics.rowToGrid, `community row to grid at ${width}`).toBeGreaterThanOrEqual(10);
+      expect(metrics.rowToGrid, `community row to grid at ${width}`).toBeLessThanOrEqual(12);
+      expect(metrics.overflowX, `horizontal overflow at ${width}`).toBe(0);
+      expect(metrics.scrollable, `detail scrolls at ${width}`).toBe(true);
+    }
   });
 
   test("community tiles brighten on hover and the scroll-top button works", async ({ page }) => {
@@ -981,6 +1331,181 @@ test.describe("Sky Palette app", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator("#photo-modal")).not.toHaveClass(/is-open/);
     expect(new URL(page.url()).searchParams.has("photo")).toBe(false);
+  });
+
+  test("handle deep link resolves the photo and keeps tag in the URL", async ({ page }) => {
+    await page.goto("/?city=bucharest-romania&tag=sky-bucharest-extra8");
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/, { timeout: 10_000 });
+    await expect(page.locator("#photo-modal-handle")).toHaveText("@sky-bucharest-extra8");
+    await expect(page.locator("#photo-modal-city")).toContainText("Bucharest");
+    expect(new URL(page.url()).searchParams.get("tag")).toBe("sky-bucharest-extra8");
+
+    await page.locator('#photo-modal button[data-action="close-photo"]').click();
+    await expect(page.locator("#photo-modal")).not.toHaveClass(/is-open/);
+    expect(new URL(page.url()).searchParams.has("tag")).toBe(false);
+    expect(new URL(page.url()).searchParams.has("photo")).toBe(false);
+  });
+
+  test("photo modal has no visible title but stays announced as a sky photo", async ({ page }) => {
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    const modal = page.locator("#photo-modal");
+    await expect(modal).toHaveClass(/is-open/);
+    await expect(modal).toHaveAttribute("aria-label", "Sky photo");
+    await expect(modal).not.toHaveAttribute("aria-labelledby", /.+/);
+    await expect(page.locator("#photo-modal-title")).toHaveText("");
+    await expect(modal).toHaveAccessibleName("Sky photo");
+    expect(new URL(page.url()).searchParams.get("tag")).toBe("sky-bucharest-48b");
+    expect(new URL(page.url()).searchParams.has("photo")).toBe(false);
+  });
+
+  test("photo share opens the native sheet with a handle link and never downloads", async ({ page }) => {
+    await stubShareApi(page, { canShare: true });
+    await stubClipboard(page);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/);
+
+    let downloads = 0;
+    page.on("download", () => {
+      downloads += 1;
+    });
+
+    await page.locator('[data-action="share-photo"]').click();
+    await expect.poll(async () => (await readShareProbe(page)).calls).toBe(1);
+    const probe = await readShareProbe(page);
+    expect(probe.url).toBe("http://localhost:4173/?tag=sky-bucharest-48b");
+    expect(probe.title).toBe("Sky photo by @sky-bucharest-48b");
+    expect(probe.text).toContain("Bucharest");
+    expect(probe.files).toHaveLength(0);
+    await page.waitForTimeout(300);
+    expect(downloads).toBe(0);
+    expect(await readCopied(page)).toBe("");
+    await expect(page.locator("#toast")).not.toHaveClass(/is-visible/);
+  });
+
+  test("photo share fallback copies the handle link and toasts, with no file", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
+    });
+    await stubClipboard(page);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/);
+
+    let downloads = 0;
+    page.on("download", () => {
+      downloads += 1;
+    });
+    await page.locator('[data-action="share-photo"]').click();
+    await expect(page.locator("#toast-msg")).toHaveText("Link copied");
+    expect(await readCopied(page)).toBe("http://localhost:4173/?tag=sky-bucharest-48b");
+    await page.waitForTimeout(300);
+    expect(downloads).toBe(0);
+  });
+
+  test("cancelling the photo share sheet is silent and copies nothing", async ({ page }) => {
+    await stubShareApi(page, { canShare: true, abort: true });
+    await stubClipboard(page);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/);
+
+    let downloads = 0;
+    page.on("download", () => {
+      downloads += 1;
+    });
+    await page.locator('[data-action="share-photo"]').click();
+    await expect.poll(async () => (await readShareProbe(page)).calls).toBe(1);
+    await expect(page.locator("#photo-share")).toBeEnabled();
+    await page.waitForTimeout(300);
+    expect(downloads).toBe(0);
+    expect(await readCopied(page)).toBe("");
+    await expect(page.locator("#toast")).not.toHaveClass(/is-visible/);
+  });
+
+  test("share disables only while the sheet is open, copy stays live", async ({ page }) => {
+    await stubShareApi(page, { canShare: true, hold: true });
+    await stubClipboard(page);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/);
+
+    const share = page.locator("#photo-share");
+    const copy = page.locator("#photo-copy-link");
+    await share.click();
+    await expect(share).toBeDisabled();
+    await expect(share).toHaveAttribute("aria-busy", "true");
+    await expect(copy).toBeEnabled();
+    await page.evaluate(() => (window as Window & { __releaseShare?: () => void }).__releaseShare?.());
+    await expect(share).toBeEnabled();
+    await expect(share).toHaveAttribute("aria-busy", "false");
+  });
+
+  test("photo footer puts copy left and share right, equal, 44 px and focus ordered", async ({ page }) => {
+    await stubClipboard(page);
+    await gotoGallery(page);
+    await openFirstDay(page);
+    await page.locator("#detail-photos .photo-tile").first().click();
+    await expect(page.locator("#photo-modal")).toHaveClass(/is-open/);
+
+    const copy = page.locator("#photo-copy-link");
+    const share = page.locator("#photo-share");
+    await expect(copy).toHaveText("Copy link");
+    await expect(copy).toHaveAttribute("data-action", "copy-photo-link");
+    await expect(share).toHaveAttribute("data-action", "share-photo");
+
+    const geometry = await page.evaluate(() => {
+      const read = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          background: style.backgroundColor,
+          color: style.color,
+          borderWidth: style.borderTopWidth,
+        };
+      };
+      const a = document.querySelector("#photo-copy-link");
+      const b = document.querySelector("#photo-share");
+      return {
+        copy: read("#photo-copy-link"),
+        share: read("#photo-share"),
+        copyBeforeShare: Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING),
+      };
+    });
+    expect(geometry.copy).not.toBeNull();
+    expect(geometry.share).not.toBeNull();
+    if (!geometry.copy || !geometry.share) return;
+    expect(geometry.copy.height).toBeGreaterThanOrEqual(44);
+    expect(geometry.share.height).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(geometry.copy.width - geometry.share.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.copy.y - geometry.share.y)).toBeLessThanOrEqual(1);
+    const gap = geometry.share.x - (geometry.copy.x + geometry.copy.width);
+    expect(gap).toBeGreaterThanOrEqual(6);
+    expect(gap).toBeLessThanOrEqual(10);
+    expect(geometry.copy.background).toBe("rgb(255, 255, 255)");
+    expect(geometry.copy.color).toBe("rgb(0, 0, 0)");
+    expect(geometry.copy.borderWidth).toBe("1px");
+    expect(geometry.share.background).toBe("rgb(0, 0, 0)");
+    expect(geometry.share.color).toBe("rgb(255, 255, 255)");
+    expect(geometry.copyBeforeShare).toBe(true);
+    expect(await copy.evaluate((element) => element.tabIndex)).toBe(0);
+    expect(await share.evaluate((element) => element.tabIndex)).toBe(0);
+
+    await copy.click();
+    await expect(page.locator("#toast-msg")).toHaveText("Link copied");
+    expect(await readCopied(page)).toBe("http://localhost:4173/?tag=sky-bucharest-48b");
   });
 
   test("detail phase glass and community strip match the gallery", async ({ page }) => {
