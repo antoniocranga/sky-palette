@@ -17,6 +17,7 @@ import type {
   SubmissionResponse,
 } from "../shared/types";
 import { reportNetworkFailure, reportNetworkSuccess } from "./lib/network";
+import type { GalleryOrder, GallerySortKey } from "./lib/gallery-sort";
 
 export type ApiErrorCode = "http" | "network" | "timeout" | "aborted" | "invalid";
 
@@ -240,14 +241,26 @@ export async function getLocation(lat: number, lon: number, options: RequestOpti
   return payload.match;
 }
 
+export interface GalleryQueryOptions extends RequestOptions {
+  sort?: GallerySortKey;
+  order?: GalleryOrder;
+}
+
 export async function getGalleryPage(
   lat: number,
   lon: number,
   cursor: string | null = null,
   limit = 6,
-  options: RequestOptions = {},
+  options: GalleryQueryOptions = {},
 ): Promise<GalleryResponse> {
-  const search = query({ lat: lat.toFixed(4), lon: lon.toFixed(4), limit: String(limit), ...(cursor ? { cursor } : {}) });
+  const search = query({
+    lat: lat.toFixed(4),
+    lon: lon.toFixed(4),
+    limit: String(limit),
+    ...(cursor ? { cursor } : {}),
+    ...(options.sort ? { sort: options.sort } : {}),
+    ...(options.order ? { order: options.order } : {}),
+  });
   return requestJson<GalleryResponse>(`/api/gallery?${search}`, {}, options);
 }
 
@@ -256,14 +269,23 @@ export async function getGallery(lat: number, lon: number, options: RequestOptio
   return payload.photos;
 }
 
-export async function getPhoto(id: string, options: RequestOptions = {}): Promise<GalleryPhoto | null> {
-  const search = query({ id });
+async function getPhotoFromSearch(search: string, options: RequestOptions): Promise<GalleryPhoto | null> {
   try {
     const payload = await requestJson<{ success: true; photo: GalleryPhoto }>(`/api/photo?${search}`, {}, options);
     return payload.photo;
   } catch {
     return null;
   }
+}
+
+/** Legacy deep links: `?photo=<id>`. */
+export async function getPhoto(id: string, options: RequestOptions = {}): Promise<GalleryPhoto | null> {
+  return getPhotoFromSearch(query({ id }), options);
+}
+
+/** Share links address a photo by its contributor handle. */
+export async function getPhotoByHandle(handle: string, options: RequestOptions = {}): Promise<GalleryPhoto | null> {
+  return getPhotoFromSearch(query({ handle }), options);
 }
 
 export async function submitPhoto(formData: FormData, options: RequestOptions = {}): Promise<SubmissionResponse> {

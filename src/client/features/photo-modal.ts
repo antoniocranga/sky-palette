@@ -1,6 +1,13 @@
-import { getPhoto } from "../api";
-import { ModalController, copyText, downloadBlob, qs, registerAction, setText, showToast } from "../lib/dom";
+import { getPhoto, getPhotoByHandle } from "../api";
+import { ModalController, copyText, qs, registerAction, setText, showToast } from "../lib/dom";
 import { formatDateShort, formatInstantClock } from "../lib/format";
+import {
+  PHOTO_ID_PARAM,
+  PHOTO_TAG_PARAM,
+  normalizeHandle,
+  parsePhotoDeepLink,
+  photoTagUrl,
+} from "../lib/photo-link";
 import type { GalleryPhoto } from "../../shared/types";
 import { store } from "../state";
 
@@ -18,7 +25,9 @@ export class PhotoModal {
   private readonly times = qs("#photo-modal-times");
   private readonly swatches = qs("#photo-modal-swatches");
   private readonly hexes = qs("#photo-modal-hexes");
+  private readonly shareButton = qs<HTMLButtonElement>("#photo-share");
   private current: GalleryPhoto | null = null;
+  private sharing = false;
 
   constructor() {
     const root = qs<HTMLElement>("#photo-modal");
@@ -37,17 +46,37 @@ export class PhotoModal {
       true,
     );
     registerAction("share-photo", () => void this.share());
+    registerAction("copy-photo-link", () => void this.copyLink());
   }
 
+  /**
+   * Resolve `?tag=<handle>` (current share links) or `?photo=<id>` (legacy).
+   * The lookup goes through `/api/photo`, so a deep link works without the
+   * community grid being loaded first.
+   */
   async syncFromUrl(): Promise<void> {
-    const id = new URL(window.location.href).searchParams.get("photo");
-    if (!id) {
+    const deepLink = parsePhotoDeepLink(window.location.search);
+    if (!deepLink.handle && !deepLink.id) {
       if (this.modal.isOpen) this.close(false);
       return;
     }
-    if (this.modal.isOpen && this.current?.id === id) return;
-    const photo = await getPhoto(id);
-    if (photo) this.open(photo, false);
+    if (this.modal.isOpen) {
+      if (deepLink.handle && normalizeHandle(this.current?.handle ?? "") === deepLink.handle) return;
+      if (!deepLink.handle && deepLink.id && this.current?.id === deepLink.id) return;
+    }
+
+    const photo = deepLink.handle
+      ? await getPhotoByHandle(deepLink.handle)
+      : deepLink.id
+        ? await getPhoto(deepLink.id)
+        : null;
+    if (!photo) return;
+
+    // The URL may have changed while the lookup was in flight.
+    const latest = parsePhotoDeepLink(window.location.search);
+    if (deepLink.handle && normalizeHandle(latest.handle ?? "") !== deepLink.handle) return;
+    if (!deepLink.handle && latest.id !== deepLink.id) return;
+    this.open(photo, false);
   }
 
   open(photo: GalleryPhoto, push: boolean): void {
@@ -65,9 +94,11 @@ export class PhotoModal {
     );
     this.paintSwatches(photo);
     if (push) {
+      const handle = this.tagFor(photo);
       const url = new URL(window.location.href);
-      url.searchParams.set("photo", photo.id);
-      window.history.pushState({ photo: photo.id }, "", url);
+      url.searchParams.delete(PHOTO_ID_PARAM);
+      url.searchParams.set(PHOTO_TAG_PARAM, handle);
+      window.history.pushState({ [PHOTO_TAG_PARAM]: handle }, "", url);
     }
     this.modal.show();
   }
@@ -77,9 +108,14 @@ export class PhotoModal {
     this.current = null;
     if (updateUrl) {
       const url = new URL(window.location.href);
-      url.searchParams.delete("photo");
+      url.searchParams.delete(PHOTO_TAG_PARAM);
+      url.searchParams.delete(PHOTO_ID_PARAM);
       window.history.replaceState({}, "", url);
     }
+  }
+
+  private tagFor(photo: GalleryPhoto): string {
+    return normalizeHandle(photo.handle) ?? photo.handle.replace(/^@+/, "").toLowerCase();
   }
 
   private cityLabel(photo: GalleryPhoto): string {
@@ -115,23 +151,55 @@ export class PhotoModal {
     }
   }
 
+  /**
+   * Native share sheet with the handle link, never a file download and never
+   * a pre-emptive copy. A cancelled sheet is completely silent; only a missing
+   * or rejecting Web Share API falls back to copying the link.
+   */
   private async share(): Promise<void> {
-    if (!this.current) return;
+    if (!this.current || this.sharing) return;
     const photo = this.current;
-    const url = `${window.location.origin}/?photo=${encodeURIComponent(photo.id)}`;
-    const text = `Sky photo by @${photo.handle} — ${this.cityLabel(photo)}, ${formatDateShort(photo.capturedAt.slice(0, 10))} · ${url}`;
-    const copied = await copyText(url);
-    if (copied) showToast("Photo link copied");
+    const handle = this.tagFor(photo);
+    const url = photoTagUrl(window.location.origin, handle);
+    const title = `Sky photo by @${handle}`;
+    const text = `${title} — ${this.cityLabel(photo)}, ${formatDateShort(photo.capturedAt.slice(0, 10))}`;
+
     if (typeof navigator.share === "function") {
+      this.setSharing(true);
       try {
-        await navigator.share({ title: `Sky photo by @${photo.handle}`, text, url });
-        setText(this.times, "Shared");
+        await navigator.share({ title, text, url });
         return;
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (isShareAbort(error)) return;
+      } finally {
+        this.setSharing(false);
       }
     }
-    downloadBlob(new Blob([photo.url], { type: "text/plain" }), `sky-photo-${photo.id}.txt`);
-    showToast("Photo link copied");
+
+    const copied = await copyText(url);
+    showToast(copied ? "Link copied" : "Could not copy the link");
   }
+
+  private async copyLink(): Promise<void> {
+    if (!this.current) return;
+    const url = photoTagUrl(window.location.origin, this.tagFor(this.current));
+    const copied = await copyText(url);
+    showToast(copied ? "Link copied" : "Could not copy the link");
+  }
+
+  private setSharing(active: boolean): void {
+    this.sharing = active;
+    if (!this.shareButton) return;
+    this.shareButton.disabled = active;
+    this.shareButton.setAttribute("aria-busy", active ? "true" : "false");
+  }
+}
+
+function isShareAbort(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
 }

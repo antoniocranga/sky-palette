@@ -156,18 +156,22 @@ textarea {
 #safe-top-scrim {
   top: 0;
   height: calc(env(safe-area-inset-top) + 16px);
-  background-color: var(--chrome-top, transparent);
+  background-color: transparent;
   background-image: linear-gradient(to bottom, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
 }
 
 #safe-bottom-scrim {
   bottom: 0;
   height: calc(env(safe-area-inset-bottom) + 20px);
-  background-color: var(--chrome-bottom, transparent);
+  background-color: transparent;
   background-image: linear-gradient(to top, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
 }
 
+/* Only the home sky needs live sampling (the slider). Elsewhere a solid
+   background-color would paint a band over the mosaic or the white detail
+   screen, so the strips stay transparent and the body tint carries the chrome. */
 body[data-screen="home"] #safe-top-scrim {
+  background-color: var(--chrome-top, transparent);
   background-image: linear-gradient(to bottom, var(--home-scrim-top), var(--home-scrim-top-end, rgba(5, 7, 15, 0)));
 }
 
@@ -175,6 +179,7 @@ body[data-screen="home"] #safe-top-scrim {
    under floating chrome; a solid sky-colour strip is invisible but keeps the
    bottom bar in sync with the horizon. */
 body[data-screen="home"] #safe-bottom-scrim {
+  background-color: var(--chrome-bottom, transparent);
   background-image: none;
 }
 
@@ -860,6 +865,19 @@ button:disabled,
   height: 100%;
   object-fit: cover;
   border-radius: 0;
+  background-color: #e5e7eb;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.photo-tile-img.is-loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-tile-img {
+    transition-duration: 0s;
+  }
 }
 
 .photo-tile:hover,
@@ -887,13 +905,13 @@ button:disabled,
   flex-direction: column;
   justify-content: flex-end;
   gap: 0.1rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem;
   color: #ffffff;
   pointer-events: none;
 }
 
 .photo-tile-time {
-  font-size: clamp(0.8125rem, 3.4vw, 0.9375rem);
+  font-size: clamp(0.875rem, 3.65vw, 1rem);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: -0.01em;
@@ -902,49 +920,24 @@ button:disabled,
 }
 
 .photo-tile-location {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  display: block;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.3;
   color: rgba(255, 255, 255, 0.74);
 }
 
-.photo-tile-city,
 .photo-tile-tag {
   display: block;
   white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: -0.03em;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
   color: inherit;
-}
-
-.photo-tile-city {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.photo-tile-tag {
-  overflow: visible;
-  text-overflow: clip;
-}
-
-@media (min-width: 640px) {
-  .photo-tile-location {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 0.25rem;
-  }
-
-  .photo-tile-city::after {
-    content: "·";
-    margin-left: 0.25rem;
-  }
 }
 
 #hud-phase-pill {

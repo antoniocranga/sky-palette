@@ -89,6 +89,7 @@ export interface ApiController {
   failPaletteOnce(): void;
   failHistoryOnce(): void;
   emptyGallery(): void;
+  setGallerySize(size: number): void;
   delayPalette(ms: number): void;
   requests: string[];
   readonly lastThumbBytes: number | null;
@@ -103,6 +104,7 @@ export const test = base.extend<{ api: ApiController }>({
         paletteFailures: 0,
         historyFailures: 0,
         galleryEmpty: false,
+        gallerySize: 24,
         paletteDelay: 0,
         requests: [] as string[],
         lastSubmitBody: null as string | null,
@@ -121,6 +123,9 @@ export const test = base.extend<{ api: ApiController }>({
         },
         emptyGallery() {
           state.galleryEmpty = true;
+        },
+        setGallerySize(size: number) {
+          state.gallerySize = Math.max(0, Math.floor(size));
         },
         delayPalette(ms: number) {
           state.paletteDelay = ms;
@@ -225,7 +230,12 @@ export const test = base.extend<{ api: ApiController }>({
 
           if (url.pathname === "/api/photo") {
             const id = url.searchParams.get("id");
-            const photo = galleryPhotos().find((item) => item.id === id) ?? null;
+            const handle = url.searchParams.get("handle")?.trim().replace(/^@+/, "").toLowerCase();
+            const photo = id
+              ? galleryPhotos().find((item) => item.id === id) ?? null
+              : handle
+                ? galleryPhotos().find((item) => item.handle === handle) ?? null
+                : null;
             await json(route, photo ? { success: true, photo } : { success: false, error: "Not found" }, photo ? 200 : 404);
             return;
           }
@@ -235,14 +245,25 @@ export const test = base.extend<{ api: ApiController }>({
               await json(route, { success: true, photos: [], nextCursor: null });
               return;
             }
-            const all = galleryPhotos();
+            const sort = url.searchParams.get("sort") === "captured" ? "captured" : "upload";
+            const order = url.searchParams.get("order") === "asc" ? "asc" : "desc";
+            const all = [...galleryPhotos(state.gallerySize)].sort((left, right) => {
+              const a = sort === "captured" ? left.capturedAt : left.createdAt;
+              const b = sort === "captured" ? right.capturedAt : right.createdAt;
+              return order === "asc" ? a.localeCompare(b) : b.localeCompare(a);
+            });
             const cursor = url.searchParams.get("cursor");
             const limit = Math.max(1, Math.min(12, Number(url.searchParams.get("limit") ?? 6)));
-            const startIndex = cursor ? all.findIndex((photo) => photo.createdAt === cursor) + 1 : 0;
+            // Opaque cursor, exactly like the Worker's: the client only echoes it.
+            const parsedCursor = cursor?.startsWith("offset:") ? Number(cursor.slice(7)) : 0;
+            const startIndex = Number.isFinite(parsedCursor) && parsedCursor > 0 ? Math.floor(parsedCursor) : 0;
             const photos = all.slice(startIndex, startIndex + limit);
-            const last = photos[photos.length - 1];
             const hasMore = startIndex + photos.length < all.length;
-            await json(route, { success: true, photos, nextCursor: hasMore && last ? last.createdAt : null });
+            await json(route, {
+              success: true,
+              photos,
+              nextCursor: hasMore ? `offset:${startIndex + photos.length}` : null,
+            });
             return;
           }
 
@@ -417,8 +438,8 @@ function searchCities(query: string): City[] {
   }).slice(0, 8);
 }
 
-function galleryPhotos(): GalleryPhoto[] {
-  return Array.from({ length: 24 }, (_, index) => {
+function galleryPhotos(count = 24): GalleryPhoto[] {
+  return Array.from({ length: count }, (_, index) => {
     const minute = 51 - index;
     return {
       id: `photo-${index + 1}`,

@@ -17,11 +17,19 @@ All notable changes to Sky Palette are documented here. Format follows [Keep a C
 - **iPhone**: the page tint follows the screen on `theme-color`, `html` and `body` — a single theme-color meta so light-mode devices stop overriding it, a route-aware value before first paint, and the document background continuing the horizon glow under the browser chrome.
 - **Submit dialog**: the upload action is a real footer pinned to the card edge, so scrolled swatches can never appear beneath it.
 
+### Added
+
+- Community gallery sorting: newest/oldest upload or capture, with a keyset `timestamp|id` cursor so ties never repeat or skip; the end of the list reads "You've seen all the skies."
+- Photo links by unique tag (`?tag=<handle>`), a Copy link button beside Share, and `/api/photo?handle=` resolution.
+
 ### Fixed
 
 - The strip around an open dialog now uses the scrim composited over the active screen instead of a fixed dark default, removing the dark band above the dimmed white detail screen on iPhone Safari.
 - Photo GPS now resolves through a server-side reverse geocoder (OpenStreetMap Nominatim, cached in D1) instead of the sparse search cache, so a point in Constanța no longer reports a village 18 km inland; a cached city is only trusted within 3 km and the fallback radius dropped from 100 km to 15 km.
 - Uploads read `DateTimeOriginal` from EXIF (JPEG, PNG and WebP) and fill the day and time pills, not just GPS; photos older than the seven-day wheel keep their own day.
+- The community grid appends only new tiles, so appending pages no longer repaints loaded images and flashes white on macOS Safari.
+- Gallery and detail no longer show solid scrim bands at the top and bottom; the sampling strips carry colour on Home only, where they match the sky.
+- The photo modal share sheet no longer copies the link first: dismissing it is silent, and only an unavailable share falls back to copying.
 - Gallery pagination stopped after the second page when the sentinel stayed inside the scroller.
 - Contributor handles were truncated in three-column tiles.
 - A magenta artefact could appear under the colour preview while a photo loaded; the blurred hex placeholders are back, drawn without live text so the spell-checker cannot underline them.
