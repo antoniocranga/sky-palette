@@ -148,28 +148,38 @@ textarea {
   pointer-events: none;
 }
 
+/* Safari 26+ ignores theme-color and samples the background-color of a fixed
+   element spanning the viewport edge (>=90% wide, >10px tall, at the centre).
+   These strips carry the sky colour as a solid background-color so the browser
+   chrome follows the slider; the gradient stays as a background-image overlay,
+   which the sampling ignores. */
 #safe-top-scrim {
   top: 0;
   height: calc(env(safe-area-inset-top) + 16px);
-  background: linear-gradient(to bottom, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
+  background-color: var(--chrome-top, transparent);
+  background-image: linear-gradient(to bottom, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
 }
 
 #safe-bottom-scrim {
   bottom: 0;
   height: calc(env(safe-area-inset-bottom) + 20px);
-  background: linear-gradient(to top, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
+  background-color: var(--chrome-bottom, transparent);
+  background-image: linear-gradient(to top, rgba(5, 7, 15, 0.92), rgba(5, 7, 15, 0));
 }
 
 body[data-screen="home"] #safe-top-scrim {
-  background: linear-gradient(to bottom, var(--home-scrim-top), var(--home-scrim-top-end, rgba(5, 7, 15, 0)));
+  background-image: linear-gradient(to bottom, var(--home-scrim-top), var(--home-scrim-top-end, rgba(5, 7, 15, 0)));
 }
 
+/* The dock is opaque, so a gradient here only darkened the strip Safari shows
+   under floating chrome; a solid sky-colour strip is invisible but keeps the
+   bottom bar in sync with the horizon. */
 body[data-screen="home"] #safe-bottom-scrim {
-  background: linear-gradient(to top, var(--home-scrim-bottom), var(--home-scrim-bottom-end, rgba(5, 7, 15, 0)));
+  background-image: none;
 }
 
 body[data-screen="detail"] #safe-top-scrim {
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
 }
 
 /* On phones the mosaic starts one rem below the top, so a 16 px scrim would
@@ -181,14 +191,10 @@ body[data-screen="detail"] #safe-top-scrim {
   }
 }
 
-/* The dock is opaque, so a bottom scrim only darkens the sky that browsers
-   show under their floating chrome (iOS 26+), where it reads as a band. */
-body[data-screen="home"] #safe-bottom-scrim {
-  display: none;
-}
+
 
 body[data-screen="detail"] #safe-bottom-scrim {
-  background: linear-gradient(to top, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+  background-image: linear-gradient(to top, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
 }
 
 .app-screen.active {

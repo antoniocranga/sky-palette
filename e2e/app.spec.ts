@@ -769,6 +769,7 @@ test.describe("Sky Palette app", () => {
           return {
             display: style.display,
             backgroundImage: style.backgroundImage,
+            backgroundColor: style.backgroundColor,
             height: element.getBoundingClientRect().height,
           };
         });
@@ -777,7 +778,10 @@ test.describe("Sky Palette app", () => {
           expect(styles.height, `${label} ${id} hidden height`).toBe(0);
           continue;
         }
-        expect(styles.backgroundImage, `${label} ${id} gradient`).toContain("linear-gradient");
+        // A scrim either fades with a gradient or carries the solid chrome
+        // colour Safari 26+ samples (home's bottom strip, for example).
+        const paints = styles.backgroundImage.includes("linear-gradient") || !/rgba\(0, 0, 0, 0\)/.test(styles.backgroundColor);
+        expect(paints, `${label} ${id} paint`).toBe(true);
         expect(styles.height, `${label} ${id} fade height`).toBeGreaterThan(0);
       }
     };
@@ -2840,14 +2844,27 @@ test.describe("Sky Palette app", () => {
 
   test("home keeps the sky under floating browser chrome", async ({ page }) => {
     await gotoHome(page);
-    const scrims = await page.evaluate(() => ({
-      bottom: getComputedStyle(document.querySelector("#safe-bottom-scrim")!).display,
-      backdrop: getComputedStyle(document.querySelector("#sky-backdrop")!).height,
-      after: getComputedStyle(document.querySelector("#sky-backdrop")!, "::after").height,
-      tint: getComputedStyle(document.documentElement).backgroundColor,
-    }));
-    // A bottom scrim over the hero darkens the strip under Safari's floating bar.
-    expect(scrims.bottom).toBe("none");
+    const scrims = await page.evaluate(() => {
+      const top = document.querySelector<HTMLElement>("#safe-top-scrim")!;
+      const bottom = document.querySelector<HTMLElement>("#safe-bottom-scrim")!;
+      const home = document.querySelector<HTMLElement>("#screen-home")!;
+      const style = getComputedStyle(home);
+      return {
+        topColor: getComputedStyle(top).backgroundColor,
+        bottomColor: getComputedStyle(bottom).backgroundColor,
+        bottomImage: getComputedStyle(bottom).backgroundImage,
+        zenith: style.getPropertyValue("--sky-zenith").trim(),
+        skyBottom: style.getPropertyValue("--sky-bottom").trim(),
+        backdrop: getComputedStyle(document.querySelector("#sky-backdrop")!).height,
+        after: getComputedStyle(document.querySelector("#sky-backdrop")!, "::after").height,
+      };
+    });
+    const rgb = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+    // Safari 26+ samples these solid strips for the browser chrome.
+    expect(scrims.topColor).toBe(rgb(scrims.zenith.toLowerCase()));
+    expect(scrims.bottomColor).toBe(rgb(scrims.skyBottom.toLowerCase()));
+    // No gradient over the hero: it only darkened the strip under the toolbar.
+    expect(scrims.bottomImage).toBe("none");
     expect(scrims.after).not.toBe("0px");
     expect(scrims.backdrop).not.toBe("0px");
 

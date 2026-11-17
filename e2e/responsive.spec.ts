@@ -107,7 +107,11 @@ async function assertFullBleed(page: import("@playwright/test").Page): Promise<v
   expect(data.meta).toContain("viewport-fit=cover");
   for (const scrim of [data.topScrim, data.bottomScrim]) {
     expect(scrim, "safe-area scrim should exist").not.toBeNull();
-    expect(`${scrim?.backgroundImage} ${scrim?.backgroundColor}`).toContain("gradient");
+    // Either a fade (gradient) or the solid colour Safari samples for chrome.
+    const paints =
+      (scrim?.backgroundImage ?? "").includes("gradient") ||
+      !/rgba\(0, 0, 0, 0\)/.test(scrim?.backgroundColor ?? "rgba(0, 0, 0, 0)");
+    expect(paints, "scrim should paint").toBe(true);
     expect(scrim?.pointerEvents).toBe("none");
   }
 }

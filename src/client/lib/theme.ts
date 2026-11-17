@@ -82,9 +82,13 @@ function screenTint(): ScreenTint {
 function apply(theme: string, surface: string): void {
   const themeValue = normalize(theme);
   const surfaceValue = normalize(surface);
+  const root = document.documentElement;
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", themeValue);
-  document.documentElement.style.backgroundColor = surfaceValue;
+  root.style.backgroundColor = surfaceValue;
   if (document.body) document.body.style.backgroundColor = surfaceValue;
+  // Safari 26+ reads these from the fixed edge strips instead of theme-color.
+  root.style.setProperty("--chrome-top", themeValue);
+  root.style.setProperty("--chrome-bottom", surfaceValue);
 }
 
 /** Recompute the tint from the active screen, its tone and any open dialog. */
