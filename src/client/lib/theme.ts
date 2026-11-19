@@ -16,7 +16,10 @@
  */
 
 const HEX = /^#[0-9a-f]{6}$/i;
-const FALLBACK = "#0b0d12";
+
+/** One dark for the gallery, the dock and every pre-paint surface. */
+export const CHROME_DARK = "#000000";
+const FALLBACK = CHROME_DARK;
 
 /** `.modal-backdrop` colour and its two alphas, kept in step with modal-scrim.css. */
 const SCRIM_RGB = [5, 7, 15] as const;
@@ -53,7 +56,7 @@ function scrimAlpha(): number {
     : SCRIM_ALPHA_POINTER;
 }
 
-interface ScreenTint {
+export interface ScreenTint {
   /** Colour of the strip above the web view. */
   theme: string;
   /** Document background under the browser chrome. */
@@ -61,8 +64,8 @@ interface ScreenTint {
 }
 
 /** The tint pair the active screen asks for, before any dialog dims it. */
-function screenTint(): ScreenTint {
-  if (document.querySelector("#screen-gallery.active")) return { theme: FALLBACK, surface: FALLBACK };
+export function screenTint(): ScreenTint {
+  if (document.querySelector("#screen-gallery.active")) return { theme: CHROME_DARK, surface: CHROME_DARK };
   if (document.querySelector("#screen-detail.active")) return { theme: "#ffffff", surface: "#ffffff" };
 
   const home = document.querySelector<HTMLElement>("#screen-home.active");
@@ -71,12 +74,12 @@ function screenTint(): ScreenTint {
     const zenith = style.getPropertyValue("--sky-zenith").trim();
     const bottom = style.getPropertyValue("--sky-bottom").trim();
     return {
-      theme: HEX.test(zenith) ? zenith : home.dataset.tone === "light" ? "#dfe7f5" : "#090b10",
-      surface: HEX.test(bottom) ? bottom : FALLBACK,
+      theme: HEX.test(zenith) ? zenith : home.dataset.tone === "light" ? "#dfe7f5" : CHROME_DARK,
+      surface: HEX.test(bottom) ? bottom : CHROME_DARK,
     };
   }
 
-  return { theme: FALLBACK, surface: FALLBACK };
+  return { theme: CHROME_DARK, surface: CHROME_DARK };
 }
 
 function apply(theme: string, surface: string): void {
@@ -85,6 +88,10 @@ function apply(theme: string, surface: string): void {
   const root = document.documentElement;
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", themeValue);
   root.style.backgroundColor = surfaceValue;
+  // The boot rule is !important because Vite appends the stylesheet after the
+  // inline script; keep it in step instead of fighting it.
+  const bootRule = document.getElementById("initial-surface");
+  if (bootRule) bootRule.textContent = `body{background-color:${surfaceValue} !important}`;
   if (document.body) document.body.style.backgroundColor = surfaceValue;
   // Safari 26+ reads these from the fixed edge strips instead of theme-color.
   root.style.setProperty("--chrome-top", themeValue);
@@ -93,6 +100,21 @@ function apply(theme: string, surface: string): void {
 
 /** Recompute the tint from the active screen, its tone and any open dialog. */
 export function refreshThemeColor(): void {
+  // During boot the DOM still shows the home screen while a deep link is being
+  // routed, so follow the URL until routing settles. Otherwise the sky palette
+  // would flash its tint over the white detail screen on a refresh.
+  if (document.body?.dataset.booting === "true") {
+    const view = new URL(window.location.href).searchParams.get("view");
+    if (view === "detail") {
+      apply("#ffffff", "#ffffff");
+      return;
+    }
+    if (view === "gallery") {
+      apply(CHROME_DARK, CHROME_DARK);
+      return;
+    }
+  }
+
   const tint = screenTint();
 
   // A dialog dims the page behind it; the strip around the card is that same

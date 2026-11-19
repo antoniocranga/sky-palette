@@ -327,8 +327,6 @@ export class HomeFeature {
     if (this.backdrop) this.backdrop.style.background = gradient;
     this.screen.style.setProperty("--sky-zenith", palette.zenith);
     this.screen.style.setProperty("--sky-bottom", palette.sunglow);
-    // The strip under floating browser chrome continues the horizon glow.
-    this.backdrop?.style.setProperty("--sky-bottom", palette.sunglow);
     // Keep the browser chrome in step with the sky behind the status bar.
     refreshThemeColor();
     this.screen.style.setProperty("--sky-midsky", palette.midsky);

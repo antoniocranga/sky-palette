@@ -37,7 +37,7 @@ html {
   min-height: 100%;
   overflow-x: clip;
   overflow-y: auto;
-  background-color: #090b10;
+  background-color: #000000;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -52,7 +52,7 @@ body {
   padding: 0;
   overflow-x: clip;
   font-family: var(--font-sans);
-  background-color: #090b10;
+  background-color: #000000;
   color: #111827;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -118,12 +118,8 @@ textarea {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
-  height: 100lvh;
   z-index: 0;
-  background: #090b10;
-  transition: background 0.18s linear;
+  background: #000000;
 }
 
 /* Browser chrome on iOS 26+ floats over a taller visual viewport than dvh.
@@ -136,7 +132,7 @@ textarea {
   right: 0;
   top: 100%;
   height: 40vh;
-  background: var(--sky-bottom, #090b10);
+  background: var(--chrome-bottom, #000000);
 }
 
 #safe-top-scrim,
@@ -187,14 +183,17 @@ body[data-screen="detail"] #safe-top-scrim {
   background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
 }
 
-/* On phones the mosaic starts one rem below the top, so a 16 px scrim would
-   float over the page background as a darker ledge. iPad keeps it because the
-   grid starts at 0 and the scrim darkens the first tile row. */
+/* On phones the mosaic starts one rem below the top, so the fade scrim only
+   painted a ledge. In-app browsers that inset the web view also tint their own
+   bars from the page's edge pixels, so on touch devices the gallery and detail
+   edges carry their required colour as a solid band: black for the gallery,
+   white for a day detail. */
 @media (max-width: 639px) {
   body[data-screen="gallery"] #safe-top-scrim {
     display: none;
   }
 }
+
 
 
 
@@ -1727,5 +1726,34 @@ textarea,
 @media (min-width: 640px) {
   #screen-gallery header {
     top: calc(env(safe-area-inset-top) + 1rem);
+  }
+}
+
+/* In-app browsers inset the web view and tint their own bars from the page's
+   edge pixels. On touch devices the gallery carries a solid black edge so those
+   bars read black; it sits above the mosaic but below the floating header and
+   dock, so nothing in the page is covered. */
+.gallery-edge {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: #000000;
+}
+
+.gallery-edge-top {
+  top: 0;
+  height: calc(env(safe-area-inset-top) + 24px);
+}
+
+.gallery-edge-bottom {
+  bottom: 0;
+  height: calc(env(safe-area-inset-bottom) + 24px);
+}
+
+@media (hover: hover) {
+  .gallery-edge {
+    display: none;
   }
 }

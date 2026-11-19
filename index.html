@@ -7,26 +7,7 @@
   <title>Sky Palette — Physical Sky Color Engine</title>
   <meta name="description" content="Real-time five-swatch sky palettes computed from solar geometry and live cloud layers. Explore 15 days of sunset colour, scrub the sun, share a sky card.">
   <meta name="robots" content="index, follow">
-  <meta name="theme-color" content="#0b0d12">
-  <script>
-    /* Before first paint: browsers sample the document background and some
-       only re-read theme-color on load, so a deep link must start correct. */
-    (function () {
-      try {
-        var view = new URLSearchParams(location.search).get("view");
-        var theme = view === "detail" ? "#ffffff" : view === "gallery" ? "#0b0d12" : "#090b10";
-        var surface = view === "detail" ? "#ffffff" : "#0b0d12";
-        var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", theme);
-        document.documentElement.style.backgroundColor = surface;
-        var rule = document.createElement("style");
-        rule.textContent = "body{background-color:" + surface + "}";
-        document.head.appendChild(rule);
-      } catch (error) {
-        /* Non-blocking: the runtime tint corrects it after boot. */
-      }
-    })();
-  </script>
+  <meta name="theme-color" content="#000000">
   <link rel="canonical" href="https://skypalette.app">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -66,6 +47,7 @@
   <!-- In production, activate with: <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "CLOUDFLARE_BEACON_TOKEN"}'></script> -->
   <!-- Styles and fonts are bundled locally: no third-party runtime requests. -->
   <link rel="preload" href="/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/boot.js"></script>
   <script type="module" src="/src/client/main.ts"></script>
 </head>
 <body data-booting="true" class="selection:bg-black selection:text-white">
@@ -263,6 +245,8 @@
   <!-- SCREEN 2: CITY GALLERY (Full Screen Mosaic + Popovers)   -->
   <!-- ======================================================== -->
   <section id="screen-gallery" class="app-screen" aria-label="Sunset gallery">
+    <div class="gallery-edge gallery-edge-top" aria-hidden="true"></div>
+    <div class="gallery-edge gallery-edge-bottom" aria-hidden="true"></div>
 
     <!-- Dynamic Full-bleed Mosaic Grid -->
     <main id="gallery-main" class="gallery-main w-full h-full p-0 m-0 overflow-y-auto">

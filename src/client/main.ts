@@ -7,7 +7,7 @@ import "./modal-scrim.css";
 
 import { getCityBySlug, getConfig, searchCities, type AppConfig } from "./api";
 import { applyToastTone, bindGlobalActions, qs, registerAction } from "./lib/dom";
-import { refreshThemeColor } from "./lib/theme";
+import { CHROME_DARK, refreshThemeColor } from "./lib/theme";
 import { ModalController } from "./lib/dom";
 import { HomeFeature } from "./features/home";
 import { GalleryFeature } from "./features/gallery";
@@ -146,7 +146,7 @@ export async function bootstrap(): Promise<void> {
     refreshThemeColor();
   }).observe(document.body, {
     attributes: true,
-    attributeFilter: ["class", "data-tone"],
+    attributeFilter: ["class", "data-tone", "data-screen"],
     subtree: true,
   });
 
@@ -355,10 +355,13 @@ function applyScreen(): void {
   const backdrop = qs<HTMLElement>("#sky-backdrop");
   if (backdrop) {
     if (screen === "detail") backdrop.style.background = "#FFFFFF";
-    else if (screen === "gallery") backdrop.style.background = "#090B10";
+    else if (screen === "gallery") backdrop.style.background = CHROME_DARK;
     // Home owns its painted palette: leaving it alone here avoids overwriting
     // the gradient that HomeFeature wrote for this same navigation.
   }
+
+  // Keep the tint in lockstep with the screen switch (bottom extension included).
+  refreshThemeColor();
 
   const homeButton = qs("#nav-btn-home");
   const galleryButton = qs("#nav-btn-gallery");
