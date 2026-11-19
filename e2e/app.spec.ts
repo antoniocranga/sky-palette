@@ -1925,6 +1925,31 @@ test.describe("Sky Palette app", () => {
     await expect(page.locator("#submit-footer")).toContainText("Protected");
   });
 
+  test("boot script sets the route tint before the app bundle runs", async ({ page }) => {
+    // The Worker's CSP allows 'self' scripts only, so the tint lives in
+    // /boot.js, not inline. Block the app bundle and read the first paint.
+    await page.route("**/assets/*.js", (route) => route.abort("failed"));
+    const read = () => page.evaluate(() => ({
+      body: getComputedStyle(document.body).backgroundColor,
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
+      hasBoot: Boolean(document.querySelector('script[src="/boot.js"]')),
+    }));
+
+    await page.goto("/?view=detail", { waitUntil: "domcontentloaded" });
+    const detail = await read();
+    expect(detail.hasBoot).toBe(true);
+    expect(detail.meta).toBe("#ffffff");
+    expect(detail.body).toBe("rgb(255, 255, 255)");
+    expect(detail.html).toBe("rgb(255, 255, 255)");
+
+    await page.goto("/?view=gallery", { waitUntil: "domcontentloaded" });
+    const gallery = await read();
+    expect(gallery.meta).toBe("#000000");
+    expect(gallery.body).toBe("rgb(0, 0, 0)");
+    expect(gallery.html).toBe("rgb(0, 0, 0)");
+  });
+
   test("first paint tint comes from the route before the app boots", async ({ page }) => {
     // Block the app entry so only the inline head script can set the tint.
     await page.route("**/src/client/main.ts", (route) => route.abort("failed"));
@@ -1943,8 +1968,8 @@ test.describe("Sky Palette app", () => {
       meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
       html: getComputedStyle(document.documentElement).backgroundColor,
     }));
-    expect(gallery.meta).toBe("#0b0d12");
-    expect(gallery.html).toBe("rgb(11, 13, 18)");
+    expect(gallery.meta).toBe("#000000");
+    expect(gallery.html).toBe("rgb(0, 0, 0)");
   });
 
   test("submit footer is pinned to the card bottom, never floating over content", async ({ page }) => {
@@ -1975,6 +2000,50 @@ test.describe("Sky Palette app", () => {
     expect(geometry.insideFooter).toBe(true);
   });
 
+  test("browser chrome colour follows the screen, including the bottom extension", async ({ page }) => {
+    const read = () => page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>("#sky-backdrop")!;
+      const root = getComputedStyle(document.documentElement);
+      const home = document.querySelector<HTMLElement>("#screen-home");
+      return {
+        after: getComputedStyle(backdrop, "::after").backgroundColor,
+        chromeBottom: root.getPropertyValue("--chrome-bottom").trim(),
+        chromeTop: root.getPropertyValue("--chrome-top").trim(),
+        html: getComputedStyle(document.documentElement).backgroundColor,
+        body: getComputedStyle(document.body).backgroundColor,
+        skyBottom: home ? getComputedStyle(home).getPropertyValue("--sky-bottom").trim() : "",
+      };
+    });
+
+    await page.goto("/?city=bucharest-romania&view=home&time=12%3A00", { waitUntil: "networkidle" });
+    await page.waitForTimeout(700);
+    const home = await read();
+    // A bright sky, so a stale value would be obvious.
+    expect(home.skyBottom).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(home.chromeBottom.toLowerCase()).toBe(home.skyBottom.toLowerCase());
+    const lower = home.skyBottom.toLowerCase();
+    expect(home.after).toBe(
+      `rgb(${parseInt(lower.slice(1, 3), 16)}, ${parseInt(lower.slice(3, 5), 16)}, ${parseInt(lower.slice(5, 7), 16)})`,
+    );
+
+    await page.locator("#nav-btn-gallery").click();
+    await expect.poll(async () => (await read()).chromeBottom).toBe("#000000");
+    const gallery = await read();
+    expect(gallery.after).toBe("rgb(0, 0, 0)");
+    expect(gallery.html).toBe("rgb(0, 0, 0)");
+    expect(gallery.body).toBe("rgb(0, 0, 0)");
+
+    await page.locator("#day-cards-grid .day-tile").first().click();
+    await expect.poll(async () => (await read()).chromeBottom).toBe("#ffffff");
+    const detail = await read();
+    expect(detail.after).toBe("rgb(255, 255, 255)");
+    expect(detail.body).toBe("rgb(255, 255, 255)");
+
+    await page.locator("#nav-btn-home").click();
+    await expect.poll(async () => (await read()).chromeBottom.toLowerCase()).toBe(home.skyBottom.toLowerCase());
+    expect((await read()).after).toBe(home.after);
+  });
+
   test("page tint follows the screen and any open dialog", async ({ page }) => {
     const tint = () => page.evaluate(() => ({
       meta: document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content,
@@ -1996,9 +2065,9 @@ test.describe("Sky Palette app", () => {
     expect(home.body).toBe(rgb(skyBottom));
 
     await gotoGallery(page);
-    await expect.poll(async () => (await tint()).meta).toBe("#0b0d12");
-    expect((await tint()).html).toBe("rgb(11, 13, 18)");
-    expect((await tint()).body).toBe("rgb(11, 13, 18)");
+    await expect.poll(async () => (await tint()).meta).toBe("#000000");
+    expect((await tint()).html).toBe("rgb(0, 0, 0)");
+    expect((await tint()).body).toBe("rgb(0, 0, 0)");
 
     await openFirstDay(page);
     await expect.poll(async () => (await tint()).meta).toBe("#ffffff");
